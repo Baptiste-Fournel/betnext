@@ -3,10 +3,11 @@ import { PlaceBetCommand } from './PlaceBetCommand';
 import { PlaceBet } from './PlaceBet';
 import { Bet } from '../domain/Bet';
 import { Odds } from '../../../shared-kernel/domain/Odds';
+import { WalletDebitPort } from '../../../shared-kernel/ports/WalletDebitPort';
 import { BetRepository, StoredBetEvent } from './ports/BetRepository';
 import { OddsProvider } from './ports/OddsProvider';
-import { WalletPort } from './ports/WalletPort';
 import { IdGenerator } from './ports/IdGenerator';
+import { UnitOfWork } from './ports/UnitOfWork';
 
 class InMemoryBets implements BetRepository {
   readonly saved: Bet[] = [];
@@ -16,17 +17,17 @@ class InMemoryBets implements BetRepository {
   async findById(id: string): Promise<Bet | null> {
     return this.saved.find((b) => b.id === id) ?? null;
   }
-
   async history(): Promise<StoredBetEvent[]> {
     return [];
   }
 }
 class FixedOdds implements OddsProvider {
+  constructor(private readonly v: number) {}
   async currentOdds(): Promise<Odds> {
-    return Odds.of(2.5);
+    return Odds.of(this.v);
   }
 }
-class SpyWallet implements WalletPort {
+class SpyWallet implements WalletDebitPort {
   readonly debits: Array<{ userId: string; amount: number; key: string }> = [];
   async debit(userId: string, amount: number, key: string): Promise<void> {
     this.debits.push({ userId, amount, key });
@@ -39,11 +40,17 @@ class SeqIds implements IdGenerator {
   }
 }
 
+const noopUow: UnitOfWork = {
+  withTransaction: <T>(work: () => Promise<T>): Promise<T> => work(),
+};
+
 describe('PlaceBetHandler (CQRS → use case)', () => {
   it('exécute la commande, fige la cote et débite le wallet une seule fois', async () => {
     const bets = new InMemoryBets();
     const wallet = new SpyWallet();
-    const handler = new PlaceBetHandler(new PlaceBet(bets, new FixedOdds(), wallet, new SeqIds()));
+    const handler = new PlaceBetHandler(
+      new PlaceBet(bets, new FixedOdds(2.5), wallet, new SeqIds(), noopUow),
+    );
 
     const out = await handler.execute(new PlaceBetCommand('u1', 'o1', 20));
 

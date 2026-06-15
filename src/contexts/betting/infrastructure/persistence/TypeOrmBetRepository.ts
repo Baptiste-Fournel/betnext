@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { DataSource, EntityManager } from 'typeorm';
 import { Bet } from '../../domain/Bet';
 import { BetStatus } from '../../domain/BetStatus';
@@ -6,12 +7,12 @@ import { BetRepository, StoredBetEvent } from '../../application/ports/BetReposi
 import { TransactionContext } from '../../../../persistence/TransactionContext';
 import { BetRecord } from './BetRecord';
 import { BetEventRecord } from './BetEventRecord';
+import { OutboxRecord } from './OutboxRecord';
 
 /**
- * Adapter Postgres (TypeORM). Tout le mapping ORM↔domaine est confiné ici (hexagonal).
- * `save` écrit le snapshot + APPEND les événements ; si une transaction ambiante existe
- * (TransactionContext, ouverte par la UnitOfWork — couture BET-5) il la REJOINT, sinon il ouvre
- * la sienne. `pullEvents()` est appelé DANS la transaction → extraction et écriture atomiques.
+ * Adapter Postgres. Mapping ORM↔domaine confiné ici (hexagonal). `save` écrit le snapshot,
+ * APPEND les événements (journal) ET insère les lignes OUTBOX, dans UNE transaction (ambiante si
+ * fournie par la UnitOfWork — BET-5). Donc un rollback n'écrit ni pari, ni event, ni outbox (BET-7).
  */
 export class TypeOrmBetRepository implements BetRepository {
   constructor(
@@ -42,20 +43,22 @@ export class TypeOrmBetRepository implements BetRepository {
     const events = bet.pullEvents();
     await manager.save(BetRecord, snapshot);
     for (const event of events) {
+      const payload = JSON.stringify({ ...event });
       await manager.insert(BetEventRecord, {
         betId: bet.id,
         type: event.type,
         version: 1,
-        payload: JSON.stringify({ ...event }),
+        payload,
         occurredAt: event.occurredAt,
       });
+      // Transactional Outbox : même transaction que le pari/journal (ADR-008).
+      await manager.insert(OutboxRecord, { id: randomUUID(), type: event.type, payload });
     }
   }
 
   async findById(id: string): Promise<Bet | null> {
     const row = await this.manager().getRepository(BetRecord).findOne({ where: { id } });
     if (!row) return null;
-    // Snapshot autoritatif : cote ET gain lus tels quels, jamais recalculés.
     return Bet.restore({
       id: row.id,
       userId: row.userId,
@@ -82,7 +85,6 @@ export class TypeOrmBetRepository implements BetRepository {
     }));
   }
 
-  /** EntityManager de la transaction ambiante si présente, sinon le manager par défaut. */
   private manager(): EntityManager {
     return this.context.getManager() ?? this.dataSource.manager;
   }

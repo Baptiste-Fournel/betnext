@@ -114,6 +114,26 @@ npm start
 - **Couture BET-5** prête : `UnitOfWork` + `TransactionContext` permettent d'envelopper débit
   wallet + pari + événements dans une seule transaction (non câblé dans `PlaceBet` à ce stade).
 
+## Atomicité du chemin argent (BET-5)
+
+Le débit du wallet, l'INSERT du pari et l'append des événements s'exécutent dans **UNE seule
+transaction** (tout-ou-rien). Le wallet est débité via son **port partagé** (Shared Kernel),
+jamais par accès direct à ses tables (frontière de contexte respectée, même en monolithe).
+
+Preuve sur **vrai Postgres** (sans Docker, via `embedded-postgres`) :
+
+```bash
+npm run test:atomicity:pg
+```
+
+→ un échec en milieu de transaction roule **tout** en arrière : **solde inchangé, aucun pari,
+aucun événement** (le script couvre aussi le chemin nominal et l'échec du save du pari).
+
+> **Compromis (défi 3)** : tant que le monolithe est mono-DB, une **transaction locale** suffit.
+> Dès que Wallet sera **extrait** en service, le débit devient une étape distante → bascule en
+> **Saga + compensation** (recrédit sur erreur : « user paie → erreur → remboursement »).
+> L'idempotence de la clé client (anti double-débit au **retry HTTP**) reste **BET-8**.
+
 ## Approche TDD
 
 Les règles de domaine sont écrites en **test-first** et restent indépendantes du framework :
@@ -132,3 +152,7 @@ l'app est lançable (`npm start`) et couverte par un test e2e (santé + 201/400/
 
 **BET-6 livré** : persistance Postgres (TypeORM) du snapshot `Bet` (cote + gain figés) + journal
 d'événements append-only ; migrations idempotentes ; bascule en mémoire sans `DATABASE_URL`.
+
+**BET-5 livré** : pose de pari **atomique** (débit wallet + pari + événements en une transaction,
+tout-ou-rien), wallet via port partagé ; « zéro perte » prouvée sur **vrai Postgres**
+(`npm run test:atomicity:pg`).

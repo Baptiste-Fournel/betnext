@@ -6,20 +6,20 @@ import { PlaceBet } from './application/PlaceBet';
 import { PlaceBetHandler } from './application/PlaceBetHandler';
 import { BET_REPOSITORY, BetRepository } from './application/ports/BetRepository';
 import { OddsProvider } from './application/ports/OddsProvider';
-import { WalletPort } from './application/ports/WalletPort';
 import { IdGenerator } from './application/ports/IdGenerator';
+import { UNIT_OF_WORK, UnitOfWork } from './application/ports/UnitOfWork';
+import { WALLET_DEBIT_PORT, WalletDebitPort } from '../../shared-kernel/ports/WalletDebitPort';
+import { TransactionContext } from '../../persistence/TransactionContext';
 import { InMemoryBetRepository } from './infrastructure/InMemoryBetRepository';
 import { TypeOrmBetRepository } from './infrastructure/persistence/TypeOrmBetRepository';
+import { TypeOrmUnitOfWork } from './infrastructure/persistence/TypeOrmUnitOfWork';
+import { NoopUnitOfWork } from './infrastructure/NoopUnitOfWork';
 import { StaticOddsProvider } from './infrastructure/StaticOddsProvider';
-import { InMemoryWalletAdapter } from './infrastructure/InMemoryWalletAdapter';
 import { UuidIdGenerator } from './infrastructure/UuidIdGenerator';
 import { BettingController } from './infrastructure/http/BettingController';
-import { TransactionContext } from '../../persistence/TransactionContext';
 
-/** Jetons des autres ports (le port BetRepository a son propre jeton BET_REPOSITORY). */
 export const BETTING_TOKENS = {
   OddsProvider: Symbol('OddsProvider'),
-  WalletPort: Symbol('WalletPort'),
   IdGenerator: Symbol('IdGenerator'),
 } as const;
 
@@ -27,15 +27,18 @@ export const BETTING_TOKENS = {
   imports: [CqrsModule],
   controllers: [BettingController],
   providers: [
-    TransactionContext,
     { provide: BETTING_TOKENS.OddsProvider, useClass: StaticOddsProvider },
-    { provide: BETTING_TOKENS.WalletPort, useClass: InMemoryWalletAdapter },
     { provide: BETTING_TOKENS.IdGenerator, useClass: UuidIdGenerator },
     {
-      // Postgres si une connexion TypeORM existe (DATABASE_URL), sinon en mémoire — ADR-006.
       provide: BET_REPOSITORY,
       useFactory: (context: TransactionContext, dataSource?: DataSource): BetRepository =>
         dataSource ? new TypeOrmBetRepository(dataSource, context) : new InMemoryBetRepository(),
+      inject: [TransactionContext, { token: getDataSourceToken(), optional: true }],
+    },
+    {
+      provide: UNIT_OF_WORK,
+      useFactory: (context: TransactionContext, dataSource?: DataSource): UnitOfWork =>
+        dataSource ? new TypeOrmUnitOfWork(dataSource, context) : new NoopUnitOfWork(),
       inject: [TransactionContext, { token: getDataSourceToken(), optional: true }],
     },
     {
@@ -43,14 +46,16 @@ export const BETTING_TOKENS = {
       useFactory: (
         bets: BetRepository,
         odds: OddsProvider,
-        wallet: WalletPort,
+        wallet: WalletDebitPort,
         ids: IdGenerator,
-      ): PlaceBet => new PlaceBet(bets, odds, wallet, ids),
+        uow: UnitOfWork,
+      ): PlaceBet => new PlaceBet(bets, odds, wallet, ids, uow),
       inject: [
         BET_REPOSITORY,
         BETTING_TOKENS.OddsProvider,
-        BETTING_TOKENS.WalletPort,
+        WALLET_DEBIT_PORT,
         BETTING_TOKENS.IdGenerator,
+        UNIT_OF_WORK,
       ],
     },
     PlaceBetHandler,

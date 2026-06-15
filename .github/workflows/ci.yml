@@ -8,6 +8,13 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,3 +32,9 @@ jobs:
         run: npm test -- --ci
       - name: Build
         run: npm run build
+      - name: Atomicité sur Postgres réel (zéro perte — défi 3)
+        run: node scripts/atomicity-pg.cjs
+      - name: Outbox → BullMQ → consommateur (vrai Redis)
+        run: node scripts/outbox-redis.cjs
+        env:
+          REDIS_URL: redis://localhost:6379

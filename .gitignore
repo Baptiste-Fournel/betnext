@@ -10,3 +10,7 @@ coverage/
 
 # artefact de transport git
 *.bundle
+.fuse_hidden*
+
+# config locale Claude Code
+.claude/

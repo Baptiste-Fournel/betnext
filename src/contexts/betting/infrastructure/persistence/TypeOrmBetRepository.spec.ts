@@ -4,6 +4,7 @@ import { TypeOrmBetRepository } from './TypeOrmBetRepository';
 import { TypeOrmUnitOfWork } from './TypeOrmUnitOfWork';
 import { BetRecord } from './BetRecord';
 import { BetEventRecord } from './BetEventRecord';
+import { OutboxRecord } from './OutboxRecord';
 import { TransactionContext } from '../../../../persistence/TransactionContext';
 import { Bet } from '../../domain/Bet';
 import { Odds } from '../../../../shared-kernel/domain/Odds';
@@ -27,7 +28,7 @@ async function newDataSource(): Promise<DataSource> {
   });
   const ds: DataSource = db.adapters.createTypeormDataSource({
     type: 'postgres',
-    entities: [BetRecord, BetEventRecord],
+    entities: [BetRecord, BetEventRecord, OutboxRecord],
     synchronize: false,
   });
   await ds.initialize();

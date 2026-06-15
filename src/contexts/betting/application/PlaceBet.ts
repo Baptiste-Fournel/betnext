@@ -1,8 +1,9 @@
 import { Bet } from '../domain/Bet';
 import { BetRepository } from './ports/BetRepository';
 import { OddsProvider } from './ports/OddsProvider';
-import { WalletPort } from './ports/WalletPort';
 import { IdGenerator } from './ports/IdGenerator';
+import { UnitOfWork } from './ports/UnitOfWork';
+import { WalletDebitPort } from '../../../shared-kernel/ports/WalletDebitPort';
 
 export interface PlaceBetInput {
   userId: string;
@@ -17,20 +18,23 @@ export interface PlaceBetOutput {
 }
 
 /**
- * Use case applicatif. Ne dépend QUE de ports (interfaces), jamais d'un adapter concret
- * ni d'un framework (Dependency Inversion / SOLID). Entièrement testable avec des doublures
- * en mémoire (voir le spec).
+ * Use case applicatif (dépend uniquement de ports). ADR-003 / BET-5 : le débit wallet, l'INSERT
+ * du pari et l'append des événements s'exécutent dans UNE SEULE transaction via `UnitOfWork` →
+ * tout-ou-rien (jamais de débit sans pari, jamais de pari sans débit, aucun event orphelin).
+ * Le wallet est débité via son PORT partagé (jamais d'accès direct à ses tables — frontière de
+ * contexte respectée même en monolithe).
  *
- * NB ADR-003 : en production, l'adapter exécute `wallet.debit` + `bets.save` dans UNE SEULE
- * transaction Postgres (unité de travail) pour garantir l'atomicité de l'argent. La clé
- * d'idempotence du débit est l'id du pari (une tentative = un débit).
+ * Idempotence : le débit n'est PAS idempotent à ce stade. BET-8 propagera une clé fournie par le
+ * CLIENT (header Idempotency-Key) jusqu'au port ; le `betId` (regénéré à chaque appel) ne peut PAS
+ * dédoublonner un retry. D'ici là, une fenêtre de double-débit subsiste au retry HTTP.
  */
 export class PlaceBet {
   constructor(
     private readonly bets: BetRepository,
     private readonly odds: OddsProvider,
-    private readonly wallet: WalletPort,
+    private readonly wallet: WalletDebitPort,
     private readonly ids: IdGenerator,
+    private readonly uow: UnitOfWork,
   ) {}
 
   async execute(input: PlaceBetInput): Promise<PlaceBetOutput> {
@@ -44,8 +48,10 @@ export class PlaceBet {
       currentOdds,
     });
 
-    await this.wallet.debit(input.userId, input.stake, betId);
-    await this.bets.save(bet);
+    await this.uow.withTransaction(async () => {
+      await this.wallet.debit(input.userId, input.stake, betId);
+      await this.bets.save(bet);
+    });
 
     return { betId, lockedOdds: bet.lockedOdds.value, potentialGain: bet.potentialGain };
   }
