@@ -15,6 +15,8 @@ export interface PlaceBetOutput {
   betId: string;
   lockedOdds: number;
   potentialGain: number;
+  /** true si la cote figée vient du défaut d'ouverture (read-model froid) — cohérence éventuelle visible. */
+  pricingProvisional?: boolean;
 }
 
 /**
@@ -38,14 +40,14 @@ export class PlaceBet {
   ) {}
 
   async execute(input: PlaceBetInput): Promise<PlaceBetOutput> {
-    const currentOdds = await this.odds.currentOdds(input.outcomeId);
+    const current = await this.odds.currentOdds(input.outcomeId);
     const betId = this.ids.next();
     const bet = Bet.place({
       id: betId,
       userId: input.userId,
       outcomeId: input.outcomeId,
       stake: input.stake,
-      currentOdds,
+      currentOdds: current.value,
     });
 
     await this.uow.withTransaction(async () => {
@@ -53,6 +55,11 @@ export class PlaceBet {
       await this.bets.save(bet);
     });
 
-    return { betId, lockedOdds: bet.lockedOdds.value, potentialGain: bet.potentialGain };
+    return {
+      betId,
+      lockedOdds: bet.lockedOdds.value,
+      potentialGain: bet.potentialGain,
+      pricingProvisional: current.provisional,
+    };
   }
 }

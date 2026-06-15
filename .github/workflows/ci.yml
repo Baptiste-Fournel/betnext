@@ -42,3 +42,7 @@ jobs:
         run: node scripts/pricing-redis.cjs
         env:
           REDIS_URL: redis://localhost:6379
+      - name: Read-model cotes (OddsUpdated → Redis → lecture) (vrai Redis — BET-10)
+        run: node scripts/readmodel-redis.cjs
+        env:
+          REDIS_URL: redis://localhost:6379

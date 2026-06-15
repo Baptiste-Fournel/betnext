@@ -23,7 +23,8 @@
     "migration:revert": "typeorm migration:revert -d dist/persistence/data-source.js",
     "test:atomicity:pg": "npm run build && node scripts/atomicity-pg.cjs",
     "test:outbox:redis": "npm run build && node scripts/outbox-redis.cjs",
-    "test:pricing:redis": "npm run build && node scripts/pricing-redis.cjs"
+    "test:pricing:redis": "npm run build && node scripts/pricing-redis.cjs",
+    "test:readmodel:redis": "npm run build && node scripts/readmodel-redis.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.4",

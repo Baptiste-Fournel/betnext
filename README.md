@@ -54,6 +54,7 @@ npm run build          # compilation TypeScript
 npm start              # démarre le monolithe (port 3000) + relais Outbox si REDIS_URL
 npm run start:pricing  # démarre le service Pricing extrait (worker bus-only ; exige REDIS_URL)
 npm run test:pricing:redis  # e2e Pricing sur vrai Redis (CI) : outbox→relais→bus→OddsUpdated
+npm run test:readmodel:redis # e2e read-model sur vrai Redis (CI) : OddsUpdated→projecteur→lecture
 ```
 
 ## API HTTP (BET-11)
@@ -182,8 +183,32 @@ Preuves : e2e **en mémoire** (jest, sans Redis) pour la boucle `BetPlaced → r
 + « Pricing down » ; e2e **vrai Redis** en CI (`npm run test:pricing:redis`) pour la chaîne complète
 `outbox → OutboxDispatcher → bus → Pricing → OddsUpdated` + idempotence en double-livraison.
 
-> **Repoussé (= BET-10)** : projeter `OddsUpdated` dans un **read-model Redis** et y **lire** la cote
-> courante (remplacement du `StaticOddsProvider` côté query, read-your-writes joueur sur Postgres).
+## Read-model Redis — lecture de la cote (BET-10)
+
+Ferme le côté **LECTURE** du CQRS. La cote courante n'est plus servie par le `StaticOddsProvider`
+ni par la base d'écriture : elle vient d'un **read-model Redis** alimenté par `OddsUpdated`.
+
+```
+OddsUpdated (bus odds) → OddsProjectorService (worker FIFO câblé au boot) → read-model Redis (hash)
+GET /odds/:id  → read-model (404 si froid)        PlaceBet → read-model (cote FIGÉE à la pose)
+GET /bets/:id  → Postgres (read-your-writes)
+```
+
+- **Cote courante** : `GET /odds/:id` lit le read-model, jamais Postgres. Cold cache → **404
+  explicite** (cohérence éventuelle observable). Au placement, cold → cote d'ouverture signalée
+  `pricingProvisional: true` dans la réponse (la latence reste visible côté client).
+- **Read-your-writes** : `GET /bets/:id` lit Postgres (store autoritatif) → le pari posé est visible
+  immédiatement ; cote **figée** du snapshot, jamais recalculée.
+- **Cote figée préservée** : une MAJ du read-model ne change pas un pari déjà posé (prouvé e2e).
+- **Anti out-of-order** : projecteur FIFO (`concurrency: 1`) + **garde monotone** `occurredAt` → un
+  snapshot plus ancien n'écrase pas une cote plus récente (jamais durablement fausse).
+
+Preuves : e2e en mémoire (cold→404, read-your-writes, cote figée vs MAJ, `pricingProvisional`) +
+garde monotone (unitaire) + **vrai Redis** en CI (`npm run test:readmodel:redis` : OddsUpdated →
+projecteur → read-model → lecture, + out-of-order).
+
+> **Repoussé (tracé)** : atomicité multi-réplique du read-model (compare-and-set Lua) inutile au POC
+> mono-instance ; périmètre/ownership de lecture (auth) quand Identity sera implémenté.
 
 ## Approche TDD
 
@@ -219,5 +244,10 @@ même tx que le pari, retry → même `betId`, corps différent → 409, concurr
 **BET-8 livré** : **Pricing extrait** en process **bus-only** (consomme `BetPlaced`, publie
 `OddsUpdated`) + **relais Outbox câblé au boot** (`OutboxDispatcher`) + **cote asynchrone** (état
 Redis partagé, scale-out) + consommateur idempotent ; Pricing down → `placeBet` OK (cote figée).
-Prouvé en mémoire (jest) et sur **vrai Redis** en CI (`npm run test:pricing:redis`). Lecture via
-read-model Redis = **BET-10** (suivant).
+Prouvé en mémoire (jest) et sur **vrai Redis** en CI (`npm run test:pricing:redis`).
+
+**BET-10 livré** : côté **LECTURE** du CQRS — cote courante servie depuis le **read-model Redis**
+(`GET /odds/:id`, alimenté par `OddsUpdated`, jamais la base d'écriture) ; **read-your-writes**
+joueur sur Postgres (`GET /bets/:id`) ; cote **figée** préservée ; cold cache → 404 /
+`pricingProvisional` ; anti out-of-order (FIFO + garde monotone). Prouvé en mémoire (jest) et sur
+**vrai Redis** en CI (`npm run test:readmodel:redis`).

@@ -5,6 +5,7 @@ import { DataSource } from 'typeorm';
 import { PlaceBet } from './application/PlaceBet';
 import { IdempotentPlaceBet } from './application/IdempotentPlaceBet';
 import { PlaceBetHandler } from './application/PlaceBetHandler';
+import { GetBetHandler } from './application/GetBetHandler';
 import { BET_REPOSITORY, BetRepository } from './application/ports/BetRepository';
 import { OddsProvider } from './application/ports/OddsProvider';
 import { IdGenerator } from './application/ports/IdGenerator';
@@ -12,13 +13,14 @@ import { UNIT_OF_WORK, UnitOfWork } from './application/ports/UnitOfWork';
 import { IDEMPOTENCY_STORE, IdempotencyStore } from './application/ports/IdempotencyStore';
 import { WALLET_DEBIT_PORT, WalletDebitPort } from '../../shared-kernel/ports/WalletDebitPort';
 import { TransactionContext } from '../../persistence/TransactionContext';
+import { ODDS_READ_MODEL, OddsReadModel } from '../../read-model/OddsReadModel';
 import { InMemoryBetRepository } from './infrastructure/InMemoryBetRepository';
 import { TypeOrmBetRepository } from './infrastructure/persistence/TypeOrmBetRepository';
 import { TypeOrmUnitOfWork } from './infrastructure/persistence/TypeOrmUnitOfWork';
 import { NoopUnitOfWork } from './infrastructure/NoopUnitOfWork';
 import { TypeOrmIdempotencyStore } from './infrastructure/persistence/TypeOrmIdempotencyStore';
 import { InMemoryIdempotencyStore } from './infrastructure/InMemoryIdempotencyStore';
-import { StaticOddsProvider } from './infrastructure/StaticOddsProvider';
+import { ReadModelOddsProvider } from './infrastructure/ReadModelOddsProvider';
 import { UuidIdGenerator } from './infrastructure/UuidIdGenerator';
 import { BettingController } from './infrastructure/http/BettingController';
 
@@ -31,7 +33,12 @@ export const BETTING_TOKENS = {
   imports: [CqrsModule],
   controllers: [BettingController],
   providers: [
-    { provide: BETTING_TOKENS.OddsProvider, useClass: StaticOddsProvider },
+    {
+      // BET-10 : la cote COURANTE vient du read-model Redis (projection des OddsUpdated).
+      provide: BETTING_TOKENS.OddsProvider,
+      useFactory: (readModel: OddsReadModel): OddsProvider => new ReadModelOddsProvider(readModel),
+      inject: [ODDS_READ_MODEL],
+    },
     { provide: BETTING_TOKENS.IdGenerator, useClass: UuidIdGenerator },
     {
       provide: BET_REPOSITORY,
@@ -80,6 +87,7 @@ export const BETTING_TOKENS = {
       inject: [PlaceBet, IDEMPOTENCY_STORE, UNIT_OF_WORK],
     },
     PlaceBetHandler,
+    GetBetHandler,
   ],
   exports: [PlaceBet, IdempotentPlaceBet],
 })

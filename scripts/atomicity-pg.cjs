@@ -52,7 +52,7 @@ const PORT = 55434;
   const bets = new TypeOrmBetRepository(ds, ctx);
   const wallet = new TypeOrmWalletDebitAdapter(ctx);
   const uow = new TypeOrmUnitOfWork(ds, ctx);
-  const odds = { currentOdds: async () => Odds.of(2) };
+  const odds = { currentOdds: async () => ({ value: Odds.of(2), provisional: false }) };
   let n = 0; const ids = { next: () => `bet-${++n}` };
   const reset = async () => { await ds.query('TRUNCATE "bets", "bet_events", "outbox", "processed_messages", "idempotency_keys" RESTART IDENTITY'); await ds.getRepository(WalletRecord).save({ userId: 'u1', balance: 100 }); };
 

@@ -3,7 +3,7 @@ import { Bet } from '../domain/Bet';
 import { Odds } from '../../../shared-kernel/domain/Odds';
 import { WalletDebitPort } from '../../../shared-kernel/ports/WalletDebitPort';
 import { BetRepository, StoredBetEvent } from './ports/BetRepository';
-import { OddsProvider } from './ports/OddsProvider';
+import { CurrentOdds, OddsProvider } from './ports/OddsProvider';
 import { IdGenerator } from './ports/IdGenerator';
 import { UnitOfWork } from './ports/UnitOfWork';
 
@@ -21,8 +21,8 @@ class InMemoryBets implements BetRepository {
 }
 class FixedOdds implements OddsProvider {
   constructor(private readonly v: number) {}
-  async currentOdds(): Promise<Odds> {
-    return Odds.of(this.v);
+  async currentOdds(): Promise<CurrentOdds> {
+    return { value: Odds.of(this.v), provisional: false };
   }
 }
 class SpyWallet implements WalletDebitPort {
