@@ -1,19 +1,50 @@
 import 'reflect-metadata';
-import { NestFactory } from '@nestjs/core';
-import { Transport, MicroserviceOptions } from '@nestjs/microservices';
-import { PricingModule } from './contexts/pricing/pricing.module';
+import { Logger } from '@nestjs/common';
+import { Queue } from 'bullmq';
+import { Redis } from 'ioredis';
+import { OddsCalculator } from './contexts/pricing/domain/OddsCalculator';
+import { RecalculateOddsOnBetPlaced } from './contexts/pricing/application/RecalculateOddsOnBetPlaced';
+import { QueueOddsPublisher } from './contexts/pricing/infrastructure/QueueOddsPublisher';
+import { RedisPricingStore } from './contexts/pricing/infrastructure/RedisPricingStore';
+import { PricingWorker } from './contexts/pricing/infrastructure/PricingWorker';
+import { BullMqQueueAdapter } from './messaging/BullMqQueueAdapter';
+import { DOMAIN_EVENTS_QUEUE, ODDS_QUEUE } from './messaging/topics';
 
 /**
- * Point d'entrée du SERVICE Pricing extrait (ADR-002). Le même module Nest qui tourne dans le
- * monolithe peut démarrer comme microservice indépendant (transporter TCP) — preuve concrète du
- * "ready-to-split" et du déploiement indépendant (contrainte 3).
+ * SERVICE Pricing EXTRAIT (ADR-002, contrainte 3). Process AUTONOME qui ne communique que par le
+ * BUS : CONSOMME BetPlaced (file domain-events), PUBLIE OddsUpdated (file odds). Aucun appel
+ * in-process vers Betting ni l'inverse → preuve du "ready-to-split" / déploiement indépendant.
+ * État dans Redis (RedisPricingStore) → SCALE-OUT horizontal : plusieurs répliques partagent les
+ * totaux. Recalcul asynchrone hors chemin d'écriture (la cote du pari reste figée).
  */
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.createMicroservice<MicroserviceOptions>(PricingModule, {
-    transport: Transport.TCP,
-    options: { host: '0.0.0.0', port: 3001 },
-  });
-  await app.listen();
+  const logger = new Logger('PricingService');
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) {
+    logger.error('REDIS_URL requis : le service Pricing ne communique que par le bus.');
+    process.exit(1);
+    return;
+  }
+  const url = new URL(redisUrl);
+  const connection = { host: url.hostname, port: Number(url.port || 6379) };
+  const redis = new Redis(redisUrl);
+  const oddsQueue = new Queue(ODDS_QUEUE, { connection });
+  const recalc = new RecalculateOddsOnBetPlaced(
+    new RedisPricingStore(redis),
+    new OddsCalculator(),
+    new QueueOddsPublisher(new BullMqQueueAdapter(oddsQueue)),
+  );
+  const worker = new PricingWorker(DOMAIN_EVENTS_QUEUE, connection, recalc).start();
+  logger.log(`Service Pricing démarré : consomme ${DOMAIN_EVENTS_QUEUE}, publie ${ODDS_QUEUE}.`);
+
+  const shutdown = async (): Promise<void> => {
+    await worker.close();
+    await oddsQueue.close();
+    redis.disconnect();
+    process.exit(0);
+  };
+  process.on('SIGINT', () => void shutdown());
+  process.on('SIGTERM', () => void shutdown());
 }
 
 void bootstrap();

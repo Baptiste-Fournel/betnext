@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { CqrsModule } from '@nestjs/cqrs';
 import { PersistenceModule } from './persistence/persistence.module';
+import { MessagingModule } from './messaging/messaging.module';
 import { BettingModule } from './contexts/betting/betting.module';
 import { PricingModule } from './contexts/pricing/pricing.module';
 import { WalletModule } from './contexts/wallet/wallet.module';
@@ -11,11 +12,13 @@ import { DomainExceptionFilter } from './shared/http/DomainExceptionFilter';
 
 /**
  * Monolithe modulaire (ADR-001). PersistenceModule.forRoot() branche Postgres si DATABASE_URL,
- * sinon mode en mémoire. Le filtre global mappe DomainError → HTTP (ADR-006).
+ * sinon mode en mémoire. MessagingModule câble le relais Outbox dans le boot (BET-8, actif si
+ * REDIS_URL). Le filtre global mappe DomainError → HTTP (ADR-006).
  */
 @Module({
   imports: [
     PersistenceModule.forRoot(),
+    MessagingModule,
     CqrsModule,
     BettingModule,
     PricingModule,

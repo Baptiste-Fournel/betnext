@@ -38,3 +38,7 @@ jobs:
         run: node scripts/outbox-redis.cjs
         env:
           REDIS_URL: redis://localhost:6379
+      - name: Pricing extrait bus-only → OddsUpdated (vrai Redis — BET-8)
+        run: node scripts/pricing-redis.cjs
+        env:
+          REDIS_URL: redis://localhost:6379
