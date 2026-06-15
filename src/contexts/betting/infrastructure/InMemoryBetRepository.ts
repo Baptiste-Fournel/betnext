@@ -1,15 +1,34 @@
 import { Bet } from '../domain/Bet';
-import { BetRepository } from '../application/ports/BetRepository';
+import { BetRepository, StoredBetEvent } from '../application/ports/BetRepository';
 
-/** Adapter de démarrage / tests. Remplacé par un adapter Postgres en production (ADR-003/005). */
+/**
+ * Adapter en mémoire (dev / tests / mode sans DATABASE_URL). Respecte la même sémantique que
+ * l'adapter Postgres : snapshot autoritatif + journal append-only (insertions uniquement).
+ */
 export class InMemoryBetRepository implements BetRepository {
-  private readonly store = new Map<string, Bet>();
+  private readonly snapshots = new Map<string, Bet>();
+  private readonly events: StoredBetEvent[] = [];
+  private seq = 0;
 
   async save(bet: Bet): Promise<void> {
-    this.store.set(bet.id, bet);
+    this.snapshots.set(bet.id, bet);
+    for (const event of bet.pullEvents()) {
+      this.events.push({
+        seq: ++this.seq,
+        betId: bet.id,
+        type: event.type,
+        version: 1,
+        payload: { ...event },
+        occurredAt: event.occurredAt,
+      });
+    }
   }
 
   async findById(id: string): Promise<Bet | null> {
-    return this.store.get(id) ?? null;
+    return this.snapshots.get(id) ?? null;
+  }
+
+  async history(betId: string): Promise<StoredBetEvent[]> {
+    return this.events.filter((e) => e.betId === betId).sort((a, b) => a.seq - b.seq);
   }
 }

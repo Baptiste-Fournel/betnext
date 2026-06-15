@@ -1,7 +1,7 @@
 import { PlaceBet } from './PlaceBet';
 import { Bet } from '../domain/Bet';
 import { Odds } from '../../../shared-kernel/domain/Odds';
-import { BetRepository } from './ports/BetRepository';
+import { BetRepository, StoredBetEvent } from './ports/BetRepository';
 import { OddsProvider } from './ports/OddsProvider';
 import { WalletPort } from './ports/WalletPort';
 import { IdGenerator } from './ports/IdGenerator';
@@ -13,6 +13,10 @@ class InMemoryBets implements BetRepository {
   }
   async findById(id: string): Promise<Bet | null> {
     return this.saved.find((b) => b.id === id) ?? null;
+  }
+
+  async history(): Promise<StoredBetEvent[]> {
+    return [];
   }
 }
 

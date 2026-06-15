@@ -1,6 +1,7 @@
 import { BetStatus } from './BetStatus';
 import { Odds } from '../../../shared-kernel/domain/Odds';
 import { DomainEvent } from '../../../shared-kernel/domain/DomainEvent';
+import { DomainError } from '../../../shared-kernel/domain/DomainError';
 import { BetPlaced, BetWon, BetLost, BetVoided } from './events';
 
 export interface PlaceBetProps {
@@ -8,14 +9,21 @@ export interface PlaceBetProps {
   userId: string;
   outcomeId: string;
   stake: number;
-  currentOdds: Odds; // cote de marché au moment de la pose
+  currentOdds: Odds;
 }
 
-/**
- * Agrégat Bet. Invariant central (défi 1 / ADR-007) : la cote est FIGÉE à la pose
- * (`lockedOdds`) et n'est jamais recalculée — un mouvement de marché ultérieur ne change
- * pas un pari déjà posé. Transitions d'état gardées (ADR-004, anti double-traitement).
- */
+/** Snapshot autoritatif persisté (ADR-005) : cote ET gain figés sont stockés, pas reconstruits. */
+export interface BetSnapshot {
+  id: string;
+  userId: string;
+  outcomeId: string;
+  stake: number;
+  lockedOdds: Odds;
+  potentialGain: number;
+  status: BetStatus;
+  createdAt: Date;
+}
+
 export class Bet {
   private _events: DomainEvent[] = [];
 
@@ -25,32 +33,47 @@ export class Bet {
     readonly outcomeId: string,
     readonly stake: number,
     readonly lockedOdds: Odds,
+    /** Gain potentiel FIGÉ à la pose et STOCKÉ — jamais recalculé à la lecture (ADR-005). */
+    readonly potentialGain: number,
     private _status: BetStatus,
+    readonly createdAt: Date,
   ) {}
 
   static place(props: PlaceBetProps): Bet {
     if (!(props.stake > 0)) {
-      throw new RangeError('Stake must be strictly positive');
+      throw new DomainError('Stake must be strictly positive');
     }
+    const potentialGain = Math.round(props.stake * props.currentOdds.value * 100) / 100;
     const bet = new Bet(
       props.id,
       props.userId,
       props.outcomeId,
       props.stake,
       props.currentOdds,
+      potentialGain,
       BetStatus.Pending,
+      new Date(),
     );
     bet.record(new BetPlaced(bet.id, bet.userId, bet.outcomeId, bet.stake, bet.lockedOdds.value));
     return bet;
   }
 
-  get status(): BetStatus {
-    return this._status;
+  /** Réhydrate depuis le snapshot — SANS émettre d'événement ni recalculer cote/gain. */
+  static restore(snapshot: BetSnapshot): Bet {
+    return new Bet(
+      snapshot.id,
+      snapshot.userId,
+      snapshot.outcomeId,
+      snapshot.stake,
+      snapshot.lockedOdds,
+      snapshot.potentialGain,
+      snapshot.status,
+      snapshot.createdAt,
+    );
   }
 
-  /** Gain potentiel, calculé sur la cote FIGÉE — indépendant de tout mouvement de marché. */
-  get potentialGain(): number {
-    return Math.round(this.stake * this.lockedOdds.value * 100) / 100;
+  get status(): BetStatus {
+    return this._status;
   }
 
   win(): void {
@@ -71,7 +94,6 @@ export class Bet {
     this.record(new BetVoided(this.id, this.stake));
   }
 
-  /** Récupère et vide les événements en attente (à publier via Outbox — ADR-008). */
   pullEvents(): DomainEvent[] {
     const pending = this._events;
     this._events = [];
@@ -80,7 +102,7 @@ export class Bet {
 
   private ensurePending(): void {
     if (this._status !== BetStatus.Pending) {
-      throw new Error(`Illegal transition from ${this._status}`);
+      throw new DomainError(`Illegal transition from ${this._status}`);
     }
   }
 

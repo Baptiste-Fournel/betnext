@@ -1,7 +1,25 @@
 import { Bet } from '../../domain/Bet';
 
-/** Port de persistance de l'agrégat Bet (adapter concret côté infrastructure). */
+/** Jeton d'injection du port (Dependency Inversion). */
+export const BET_REPOSITORY = Symbol('BetRepository');
+
+/** Entrée du journal append-only (audit / rejeu — ADR-005). */
+export interface StoredBetEvent {
+  seq: number;
+  betId: string;
+  type: string;
+  version: number;
+  payload: unknown;
+  occurredAt: Date;
+}
+
+/**
+ * Port de persistance de l'agrégat Bet (hexagonal : AUCUNE fuite d'ORM ici).
+ * `save` persiste le SNAPSHOT (cote figée incluse) + APPEND les nouveaux événements de façon
+ * atomique. `findById` relit depuis le snapshot autoritatif — JAMAIS de recalcul de cote.
+ */
 export interface BetRepository {
   save(bet: Bet): Promise<void>;
   findById(id: string): Promise<Bet | null>;
+  history(betId: string): Promise<StoredBetEvent[]>;
 }
