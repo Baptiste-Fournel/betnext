@@ -14,6 +14,12 @@ const { BetEventRecord } = require('../dist/contexts/betting/infrastructure/pers
 const { OutboxRecord } = require('../dist/contexts/betting/infrastructure/persistence/OutboxRecord.js');
 const { ProcessedMessageRecord } = require('../dist/messaging/ProcessedMessageRecord.js');
 const { IdempotentMessageHandler } = require('../dist/messaging/IdempotentMessageHandler.js');
+const { IdempotencyKeyRecord } = require('../dist/contexts/betting/infrastructure/persistence/IdempotencyKeyRecord.js');
+const { TypeOrmIdempotencyStore } = require('../dist/contexts/betting/infrastructure/persistence/TypeOrmIdempotencyStore.js');
+const { IdempotentPlaceBet } = require('../dist/contexts/betting/application/IdempotentPlaceBet.js');
+const { IdempotencyConflictError } = require('../dist/shared-kernel/domain/IdempotencyConflictError.js');
+const { InitIdempotencyKeys1718600000000 } = require('../dist/contexts/betting/infrastructure/persistence/migrations/1718600000000-InitIdempotencyKeys.js');
+const { createHash } = require('node:crypto');
 const { WalletRecord } = require('../dist/contexts/wallet/infrastructure/persistence/WalletRecord.js');
 const { InitBetting1718200000000 } = require('../dist/contexts/betting/infrastructure/persistence/migrations/1718200000000-InitBetting.js');
 const { InitWallet1718300000000 } = require('../dist/contexts/wallet/infrastructure/persistence/migrations/1718300000000-InitWallet.js');
@@ -36,8 +42,8 @@ const PORT = 55434;
 
   const ds = new DataSource({
     type: 'postgres', host: '127.0.0.1', port: PORT, username: 'betnext', password: 'betnext', database: 'betnext',
-    entities: [BetRecord, BetEventRecord, WalletRecord, OutboxRecord, ProcessedMessageRecord],
-    migrations: [InitBetting1718200000000, InitWallet1718300000000, InitOutbox1718400000000, InitProcessedMessages1718500000000],
+    entities: [BetRecord, BetEventRecord, WalletRecord, OutboxRecord, ProcessedMessageRecord, IdempotencyKeyRecord],
+    migrations: [InitBetting1718200000000, InitWallet1718300000000, InitOutbox1718400000000, InitProcessedMessages1718500000000, InitIdempotencyKeys1718600000000],
   });
   await ds.initialize();
   await ds.runMigrations(); // joue le VRAI schéma (incl. trigger append-only)
@@ -48,7 +54,7 @@ const PORT = 55434;
   const uow = new TypeOrmUnitOfWork(ds, ctx);
   const odds = { currentOdds: async () => Odds.of(2) };
   let n = 0; const ids = { next: () => `bet-${++n}` };
-  const reset = async () => { await ds.query('TRUNCATE "bets", "bet_events", "outbox", "processed_messages" RESTART IDENTITY'); await ds.getRepository(WalletRecord).save({ userId: 'u1', balance: 100 }); };
+  const reset = async () => { await ds.query('TRUNCATE "bets", "bet_events", "outbox", "processed_messages", "idempotency_keys" RESTART IDENTITY'); await ds.getRepository(WalletRecord).save({ userId: 'u1', balance: 100 }); };
 
   // 1) chemin nominal
   await reset();
@@ -144,6 +150,67 @@ const PORT = 55434;
   assert.strictEqual(effc[0].c, 1);
   assert.strictEqual(pmc[0].c, 1);
   console.log('\u2713 idempotence CONCURRENTE : 2 livraisons // -> effet DB 1 fois (PK garde-fou)');
+
+  // 9/10/11) IDEMPOTENCE HTTP (Idempotency-Key) sur vrai Postgres
+  const hashOf = (i) => createHash('sha256').update(JSON.stringify({ userId: i.userId, outcomeId: i.outcomeId, stake: i.stake })).digest('hex');
+  const idemPlaceBet = new IdempotentPlaceBet(
+    new PlaceBet(bets, odds, wallet, ids, uow),
+    new TypeOrmIdempotencyStore(ds, ctx),
+    uow,
+  );
+  const balance = async () => Number((await ds.getRepository(WalletRecord).findOneOrFail({ where: { userId: 'u1' } })).balance);
+  const betCount = async () => (await ds.query('SELECT count(*)::int AS c FROM bets'))[0].c;
+
+  // 9) même clé + même corps, séquentiel -> 1 pari / 1 débit / même betId
+  await reset();
+  const inp = { userId: 'u1', outcomeId: 'o1', stake: 20 };
+  const o1 = await idemPlaceBet.execute({ ...inp, idempotencyKey: 'idem-seq', requestHash: hashOf(inp) });
+  const o2 = await idemPlaceBet.execute({ ...inp, idempotencyKey: 'idem-seq', requestHash: hashOf(inp) });
+  assert.strictEqual(o1.betId, o2.betId);
+  assert.strictEqual(await betCount(), 1);
+  assert.strictEqual(await balance(), 80);
+  console.log('\u2713 idempotence HTTP : retry meme cle (ex. reponse perdue) -> 1 pari / 1 debit (meme betId)');
+
+  // 10) même clé en CONCURRENCE -> 1 seul pari / 1 débit
+  await reset();
+  const cr = await Promise.allSettled([
+    idemPlaceBet.execute({ ...inp, idempotencyKey: 'idem-conc', requestHash: hashOf(inp) }),
+    idemPlaceBet.execute({ ...inp, idempotencyKey: 'idem-conc', requestHash: hashOf(inp) }),
+  ]);
+  const ok = cr.filter((r) => r.status === 'fulfilled');
+  assert.strictEqual(ok.length, 2);
+  assert.strictEqual(ok[0].value.betId, ok[1].value.betId);
+  assert.strictEqual(await betCount(), 1);
+  assert.strictEqual(await balance(), 80);
+  console.log('\u2713 idempotence HTTP CONCURRENTE : meme cle // -> 1 pari / 1 debit');
+
+  // 11) même clé + corps DIFFÉRENT -> conflit (409), aucun 2e pari
+  await reset();
+  const a = { userId: 'u1', outcomeId: 'o1', stake: 10 };
+  const b = { userId: 'u1', outcomeId: 'o1', stake: 99 };
+  await idemPlaceBet.execute({ ...a, idempotencyKey: 'idem-cflt', requestHash: hashOf(a) });
+  let conflict = false;
+  try { await idemPlaceBet.execute({ ...b, idempotencyKey: 'idem-cflt', requestHash: hashOf(b) }); }
+  catch (e) { conflict = e instanceof IdempotencyConflictError; }
+  assert.ok(conflict);
+  assert.strictEqual(await betCount(), 1);
+  console.log('\u2713 idempotence HTTP : meme cle + corps different -> conflit (aucun 2e pari)');
+
+  // 12) retry d'une tentative ÉCHOUÉE (solde insuffisant) avec la MÊME clé -> clé NON brûlée
+  await reset();
+  await ds.getRepository(WalletRecord).update({ userId: 'u1' }, { balance: '5' }); // < mise 10
+  const fInp = { userId: 'u1', outcomeId: 'o1', stake: 10 };
+  let failed = false;
+  try { await idemPlaceBet.execute({ ...fInp, idempotencyKey: 'idem-retry', requestHash: hashOf(fInp) }); }
+  catch { failed = true; }
+  assert.ok(failed); // échoue (solde insuffisant)
+  const keyRows = await ds.query('SELECT count(*)::int AS c FROM idempotency_keys WHERE "key" = $1', ['idem-retry']);
+  assert.strictEqual(keyRows[0].c, 0); // clé rollback -> NON brûlée
+  await ds.getRepository(WalletRecord).update({ userId: 'u1' }, { balance: '100' }); // recharge
+  const ok12 = await idemPlaceBet.execute({ ...fInp, idempotencyKey: 'idem-retry', requestHash: hashOf(fInp) });
+  assert.ok(ok12.betId);
+  assert.strictEqual(await betCount(), 1); // retry corrigé crée le pari
+  console.log('\u2713 idempotence HTTP : retry apres echec (meme cle) -> cle non brulee, pari cree');
 
   await ds.destroy();
   await pg.stop();

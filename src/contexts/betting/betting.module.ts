@@ -3,17 +3,21 @@ import { CqrsModule } from '@nestjs/cqrs';
 import { getDataSourceToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { PlaceBet } from './application/PlaceBet';
+import { IdempotentPlaceBet } from './application/IdempotentPlaceBet';
 import { PlaceBetHandler } from './application/PlaceBetHandler';
 import { BET_REPOSITORY, BetRepository } from './application/ports/BetRepository';
 import { OddsProvider } from './application/ports/OddsProvider';
 import { IdGenerator } from './application/ports/IdGenerator';
 import { UNIT_OF_WORK, UnitOfWork } from './application/ports/UnitOfWork';
+import { IDEMPOTENCY_STORE, IdempotencyStore } from './application/ports/IdempotencyStore';
 import { WALLET_DEBIT_PORT, WalletDebitPort } from '../../shared-kernel/ports/WalletDebitPort';
 import { TransactionContext } from '../../persistence/TransactionContext';
 import { InMemoryBetRepository } from './infrastructure/InMemoryBetRepository';
 import { TypeOrmBetRepository } from './infrastructure/persistence/TypeOrmBetRepository';
 import { TypeOrmUnitOfWork } from './infrastructure/persistence/TypeOrmUnitOfWork';
 import { NoopUnitOfWork } from './infrastructure/NoopUnitOfWork';
+import { TypeOrmIdempotencyStore } from './infrastructure/persistence/TypeOrmIdempotencyStore';
+import { InMemoryIdempotencyStore } from './infrastructure/InMemoryIdempotencyStore';
 import { StaticOddsProvider } from './infrastructure/StaticOddsProvider';
 import { UuidIdGenerator } from './infrastructure/UuidIdGenerator';
 import { BettingController } from './infrastructure/http/BettingController';
@@ -42,6 +46,14 @@ export const BETTING_TOKENS = {
       inject: [TransactionContext, { token: getDataSourceToken(), optional: true }],
     },
     {
+      provide: IDEMPOTENCY_STORE,
+      useFactory: (context: TransactionContext, dataSource?: DataSource): IdempotencyStore =>
+        dataSource
+          ? new TypeOrmIdempotencyStore(dataSource, context)
+          : new InMemoryIdempotencyStore(),
+      inject: [TransactionContext, { token: getDataSourceToken(), optional: true }],
+    },
+    {
       provide: PlaceBet,
       useFactory: (
         bets: BetRepository,
@@ -58,8 +70,17 @@ export const BETTING_TOKENS = {
         UNIT_OF_WORK,
       ],
     },
+    {
+      provide: IdempotentPlaceBet,
+      useFactory: (
+        placeBet: PlaceBet,
+        store: IdempotencyStore,
+        uow: UnitOfWork,
+      ): IdempotentPlaceBet => new IdempotentPlaceBet(placeBet, store, uow),
+      inject: [PlaceBet, IDEMPOTENCY_STORE, UNIT_OF_WORK],
+    },
     PlaceBetHandler,
   ],
-  exports: [PlaceBet],
+  exports: [PlaceBet, IdempotentPlaceBet],
 })
 export class BettingModule {}

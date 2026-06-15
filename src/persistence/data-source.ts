@@ -3,23 +3,33 @@ import { DataSource } from 'typeorm';
 import { BetRecord } from '../contexts/betting/infrastructure/persistence/BetRecord';
 import { BetEventRecord } from '../contexts/betting/infrastructure/persistence/BetEventRecord';
 import { OutboxRecord } from '../contexts/betting/infrastructure/persistence/OutboxRecord';
-import { ProcessedMessageRecord } from '../messaging/ProcessedMessageRecord';
+import { IdempotencyKeyRecord } from '../contexts/betting/infrastructure/persistence/IdempotencyKeyRecord';
 import { WalletRecord } from '../contexts/wallet/infrastructure/persistence/WalletRecord';
+import { ProcessedMessageRecord } from '../messaging/ProcessedMessageRecord';
 import { InitBetting1718200000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718200000000-InitBetting';
 import { InitWallet1718300000000 } from '../contexts/wallet/infrastructure/persistence/migrations/1718300000000-InitWallet';
 import { InitOutbox1718400000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718400000000-InitOutbox';
 import { InitProcessedMessages1718500000000 } from '../messaging/migrations/1718500000000-InitProcessedMessages';
+import { InitIdempotencyKeys1718600000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718600000000-InitIdempotencyKeys';
 
 /** DataSource du CLI TypeORM (migration:run/revert). DATABASE_URL par défaut = POC local. */
 export const AppDataSource = new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL ?? 'postgres://betnext:betnext@localhost:5432/betnext',
-  entities: [BetRecord, BetEventRecord, WalletRecord, OutboxRecord, ProcessedMessageRecord],
+  entities: [
+    BetRecord,
+    BetEventRecord,
+    OutboxRecord,
+    IdempotencyKeyRecord,
+    WalletRecord,
+    ProcessedMessageRecord,
+  ],
   migrations: [
     InitBetting1718200000000,
     InitWallet1718300000000,
     InitOutbox1718400000000,
     InitProcessedMessages1718500000000,
+    InitIdempotencyKeys1718600000000,
   ],
   synchronize: false,
 });

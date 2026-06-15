@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import { BadRequestException, Body, Controller, Headers, HttpCode, Post } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import { PlaceBetCommand } from '../../application/PlaceBetCommand';
 import { PlaceBetOutput } from '../../application/PlaceBet';
@@ -10,8 +11,9 @@ interface PlaceBetBody {
 }
 
 /**
- * Adapter HTTP entrant. Validation de FORME → 400. Les invariants métier (DomainError levée par
- * le domaine) sont mappés en 422 par le filtre global DomainExceptionFilter — pas de try/catch ici.
+ * Adapter HTTP entrant. `Idempotency-Key` REQUIS (absent → 400) : ferme la fenêtre de double-débit
+ * au retry HTTP. Le hash du corps permet de détecter « même clé, corps différent » → 409 (via le
+ * filtre global). Forme du corps invalide → 400 ; invariant métier → 422.
  */
 @Controller('bets')
 export class BettingController {
@@ -19,11 +21,23 @@ export class BettingController {
 
   @Post()
   @HttpCode(201)
-  place(@Body() body: PlaceBetBody): Promise<PlaceBetOutput> {
-    return this.commandBus.execute<PlaceBetCommand, PlaceBetOutput>(this.toCommand(body));
+  place(
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() body: PlaceBetBody,
+  ): Promise<PlaceBetOutput> {
+    if (!idempotencyKey || idempotencyKey.trim() === '') {
+      throw new BadRequestException("Header 'Idempotency-Key' requis");
+    }
+    const { userId, outcomeId, stake } = this.validate(body);
+    const requestHash = createHash('sha256')
+      .update(JSON.stringify({ userId, outcomeId, stake }))
+      .digest('hex');
+    return this.commandBus.execute<PlaceBetCommand, PlaceBetOutput>(
+      new PlaceBetCommand(userId, outcomeId, stake, idempotencyKey.trim(), requestHash),
+    );
   }
 
-  private toCommand(body: PlaceBetBody): PlaceBetCommand {
+  private validate(body: PlaceBetBody): { userId: string; outcomeId: string; stake: number } {
     const userId = typeof body.userId === 'string' ? body.userId.trim() : '';
     const outcomeId = typeof body.outcomeId === 'string' ? body.outcomeId.trim() : '';
     const stake = typeof body.stake === 'number' ? body.stake : NaN;
@@ -34,6 +48,6 @@ export class BettingController {
     if (!Number.isFinite(stake)) errors.push('stake (nombre) requis');
     if (errors.length > 0) throw new BadRequestException(errors);
 
-    return new PlaceBetCommand(userId, outcomeId, stake);
+    return { userId, outcomeId, stake };
   }
 }

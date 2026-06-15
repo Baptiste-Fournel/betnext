@@ -4,18 +4,35 @@ import { TransactionContext } from './TransactionContext';
 import { BetRecord } from '../contexts/betting/infrastructure/persistence/BetRecord';
 import { BetEventRecord } from '../contexts/betting/infrastructure/persistence/BetEventRecord';
 import { OutboxRecord } from '../contexts/betting/infrastructure/persistence/OutboxRecord';
-import { ProcessedMessageRecord } from '../messaging/ProcessedMessageRecord';
+import { IdempotencyKeyRecord } from '../contexts/betting/infrastructure/persistence/IdempotencyKeyRecord';
 import { WalletRecord } from '../contexts/wallet/infrastructure/persistence/WalletRecord';
+import { ProcessedMessageRecord } from '../messaging/ProcessedMessageRecord';
 import { InitBetting1718200000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718200000000-InitBetting';
 import { InitWallet1718300000000 } from '../contexts/wallet/infrastructure/persistence/migrations/1718300000000-InitWallet';
 import { InitOutbox1718400000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718400000000-InitOutbox';
 import { InitProcessedMessages1718500000000 } from '../messaging/migrations/1718500000000-InitProcessedMessages';
+import { InitIdempotencyKeys1718600000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718600000000-InitIdempotencyKeys';
+
+const ENTITIES = [
+  BetRecord,
+  BetEventRecord,
+  OutboxRecord,
+  IdempotencyKeyRecord,
+  WalletRecord,
+  ProcessedMessageRecord,
+];
+const MIGRATIONS = [
+  InitBetting1718200000000,
+  InitWallet1718300000000,
+  InitOutbox1718400000000,
+  InitProcessedMessages1718500000000,
+  InitIdempotencyKeys1718600000000,
+];
 
 /**
- * Connexion persistance + couture transactionnelle. `TransactionContext` est fourni en GLOBAL
- * (une seule instance partagée par les repositories Betting et l'adapter Wallet → ils rejoignent
- * la MÊME transaction, condition de l'atomicité BET-5). DATABASE_URL défini → TypeORM/Postgres
- * (migrations idempotentes au boot) ; sinon → adapters en mémoire. DATABASE_URL non codé en dur.
+ * Connexion persistance + couture transactionnelle (TransactionContext en GLOBAL, instance unique
+ * partagée). DATABASE_URL défini → TypeORM/Postgres (migrations idempotentes au boot) ; sinon →
+ * adapters en mémoire. DATABASE_URL non codé en dur.
  */
 @Module({})
 export class PersistenceModule {
@@ -36,13 +53,8 @@ export class PersistenceModule {
         TypeOrmModule.forRoot({
           type: 'postgres',
           url,
-          entities: [BetRecord, BetEventRecord, WalletRecord, OutboxRecord, ProcessedMessageRecord],
-          migrations: [
-            InitBetting1718200000000,
-            InitWallet1718300000000,
-            InitOutbox1718400000000,
-            InitProcessedMessages1718500000000,
-          ],
+          entities: ENTITIES,
+          migrations: MIGRATIONS,
           migrationsRun: true,
           synchronize: false,
         }),

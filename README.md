@@ -71,23 +71,23 @@ Endpoints :
 curl http://localhost:3000/health
 # → {"status":"ok","service":"betnext","timestamp":"..."}
 
-# Poser un pari (commande via CQRS) → 201
+# Poser un pari (commande via CQRS) → 201. Le header Idempotency-Key est OBLIGATOIRE.
 curl -X POST http://localhost:3000/bets \
   -H "Content-Type: application/json" \
+  -H "Idempotency-Key: 3f9c-…" \
   -d '{"userId":"u1","outcomeId":"o1","stake":20}'
 # → {"betId":"...","lockedOdds":2,"potentialGain":40}
 
+# Header Idempotency-Key absent → 400
 # Forme invalide (champ manquant / type) → 400
 # Mise <= 0 (invariant métier, levé par le domaine) → 422
+# Même clé + même corps → MÊME betId (aucun 2e pari ni débit)
+# Même clé + corps différent → 409 (conflit) ; tentative concurrente non finie → 425
 ```
 
 > **Valeurs par défaut de POC — NON tranchées, faciles à changer** : la cote vient d'un
 > `StaticOddsProvider` figé à **2.0** (sera remplacé par le read-model alimenté par Pricing —
 > ADR-006/007) ; wallet et catalogue sont des stubs en mémoire.
->
-> **Limites assumées à ce stade** (tickets suivants) : pas d'atomicité réelle débit + pari
-> (BET-5) ; pas de clé d'idempotence fournie par le client → un *retry HTTP* recrée un pari
-> (BET-8).
 
 ## Persistance (BET-6)
 
@@ -132,7 +132,28 @@ aucun événement** (le script couvre aussi le chemin nominal et l'échec du sav
 > **Compromis (défi 3)** : tant que le monolithe est mono-DB, une **transaction locale** suffit.
 > Dès que Wallet sera **extrait** en service, le débit devient une étape distante → bascule en
 > **Saga + compensation** (recrédit sur erreur : « user paie → erreur → remboursement »).
-> L'idempotence de la clé client (anti double-débit au **retry HTTP**) reste **BET-8**.
+
+## Idempotence HTTP (BET-18)
+
+`POST /bets` exige un header **`Idempotency-Key`** (absent → 400). La clé + un **hash du corps**
+sont réservés *atomiquement* (`INSERT … ON CONFLICT DO NOTHING`) **dans la même transaction** que
+le pari (UoW réentrant) : réservation → débit + pari + events + outbox → enregistrement du résultat.
+
+- **Même clé + même corps** → renvoie le **même `betId`** (réponse rejouée, ex. *réponse perdue*) ;
+  **aucun 2e pari ni débit**.
+- **Même clé + corps différent** → **409** (conflit, jamais un faux succès silencieux).
+- **En concurrence**, le perdant **bloque** sur l'insert non commité du gagnant puis lit le résultat
+  → **un seul pari** (garde-fou contrainte d'unicité).
+- **Tentative échouée** → la clé est **libérée** (`release`) → un *retry corrigé* n'est jamais
+  bloqué par un faux 409 (sur Postgres le rollback l'annule ; `release` couvre le mode sans tx).
+- Distinct de l'idempotence **consommateur** (BET-7, dé-doublonnage d'events) : ici c'est
+  l'idempotence d'**écriture côté API**.
+
+Preuve sur **vrai Postgres** (`npm run test:atomicity:pg`, cas 9→12) : retry même clé → 1 pari/1
+débit ; concurrent → 1 pari ; corps différent → conflit ; **retry après échec → clé non brûlée**.
+
+> **Repoussé (tracé)** : pas de **TTL/purge** des clés (`createdAt` présent, table append-only qui
+> croît) → tâche d'exploitation ultérieure, hors périmètre POC.
 
 ## Approche TDD
 
@@ -156,3 +177,11 @@ d'événements append-only ; migrations idempotentes ; bascule en mémoire sans 
 **BET-5 livré** : pose de pari **atomique** (débit wallet + pari + événements en une transaction,
 tout-ou-rien), wallet via port partagé ; « zéro perte » prouvée sur **vrai Postgres**
 (`npm run test:atomicity:pg`).
+
+**BET-7 livré** : **Transactional Outbox** (event écrit dans la même tx que le pari → fenêtre de
+perte fermée) + relais vers **BullMQ** + **consommateur idempotent** (`processed_messages`, effet
+1 fois même en double-livraison) ; prouvé sur vrai Postgres + vrai Redis (CI / docker-compose).
+
+**BET-18 livré** : **idempotence HTTP** (`Idempotency-Key`) sur `POST /bets` — réservation dans la
+même tx que le pari, retry → même `betId`, corps différent → 409, concurrence → 1 pari, retry après
+échec → clé non brûlée ; prouvé sur **vrai Postgres** (`npm run test:atomicity:pg`, cas 9→12).

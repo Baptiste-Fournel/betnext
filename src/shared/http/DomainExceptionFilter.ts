@@ -1,20 +1,22 @@
 import {
   ArgumentsHost,
   Catch,
+  ConflictException,
   ExceptionFilter,
   HttpException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { DomainError } from '../../shared-kernel/domain/DomainError';
+import { IdempotencyConflictError } from '../../shared-kernel/domain/IdempotencyConflictError';
+import { IdempotencyInProgressError } from '../../shared-kernel/domain/IdempotencyInProgressError';
 
 interface HttpResponseLike {
   status(code: number): { json(body: unknown): void };
 }
 
 /**
- * Filtre GLOBAL : mappe les erreurs de domaine sur des statuts HTTP. EXTENSIBLE — on route ici
- * les futurs sous-types de DomainError vers des statuts dédiés (404/409/…). Par défaut, une
- * violation d'invariant métier → 422. Évite un 422 codé en dur dans chaque contrôleur.
+ * Filtre GLOBAL : mappe les erreurs de domaine sur des statuts HTTP, par TYPE (extensible).
+ * Conflit d'idempotence → 409 ; idempotence en cours → 425 ; toute autre violation → 422.
  */
 @Catch(DomainError)
 export class DomainExceptionFilter implements ExceptionFilter {
@@ -25,7 +27,12 @@ export class DomainExceptionFilter implements ExceptionFilter {
   }
 
   private toHttpException(error: DomainError): HttpException {
-    // Point d'extension : switch sur le type/nom d'erreur pour d'autres statuts.
+    if (error instanceof IdempotencyConflictError) {
+      return new ConflictException(error.message);
+    }
+    if (error instanceof IdempotencyInProgressError) {
+      return new HttpException(error.message, 425);
+    }
     return new UnprocessableEntityException(error.message);
   }
 }
