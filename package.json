@@ -23,6 +23,8 @@
     "migration:revert": "typeorm migration:revert -d dist/persistence/data-source.js",
     "test:atomicity:pg": "npm run build && node scripts/atomicity-pg.cjs",
     "test:reconciliation:pg": "npm run build && node scripts/reconciliation-pg.cjs",
+    "test:bootstrap:pg": "npm run build && node scripts/bootstrap-pg.cjs",
+    "db:seed": "npm run build && node scripts/seed.cjs",
     "test:outbox:redis": "npm run build && node scripts/outbox-redis.cjs",
     "test:pricing:redis": "npm run build && node scripts/pricing-redis.cjs",
     "test:readmodel:redis": "npm run build && node scripts/readmodel-redis.cjs",

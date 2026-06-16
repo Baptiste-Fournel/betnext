@@ -36,6 +36,8 @@ jobs:
         run: node scripts/atomicity-pg.cjs
       - name: Réconciliation argent sur Postgres réel (filet zéro perte — BET-15)
         run: node scripts/reconciliation-pg.cjs
+      - name: Bootstrap Postgres (schéma vierge → app fonctionnelle, migrations idempotentes, seed) — BET-19
+        run: node scripts/bootstrap-pg.cjs
       - name: Outbox → BullMQ → consommateur (vrai Redis)
         run: node scripts/outbox-redis.cjs
         env:

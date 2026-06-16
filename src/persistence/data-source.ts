@@ -1,45 +1,24 @@
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
-import { BetRecord } from '../contexts/betting/infrastructure/persistence/BetRecord';
-import { BetEventRecord } from '../contexts/betting/infrastructure/persistence/BetEventRecord';
-import { OutboxRecord } from '../contexts/betting/infrastructure/persistence/OutboxRecord';
-import { IdempotencyKeyRecord } from '../contexts/betting/infrastructure/persistence/IdempotencyKeyRecord';
-import { WalletRecord } from '../contexts/wallet/infrastructure/persistence/WalletRecord';
-import { WalletOperationRecord } from '../contexts/wallet/infrastructure/persistence/WalletOperationRecord';
-import { ProcessedMessageRecord } from '../messaging/ProcessedMessageRecord';
-import { InitBetting1718200000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718200000000-InitBetting';
-import { InitWallet1718300000000 } from '../contexts/wallet/infrastructure/persistence/migrations/1718300000000-InitWallet';
-import { InitOutbox1718400000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718400000000-InitOutbox';
-import { InitProcessedMessages1718500000000 } from '../messaging/migrations/1718500000000-InitProcessedMessages';
-import { InitIdempotencyKeys1718600000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718600000000-InitIdempotencyKeys';
-import { InitWalletOperations1718700000000 } from '../contexts/wallet/infrastructure/persistence/migrations/1718700000000-InitWalletOperations';
-import { InitBetSettlementGuard1718800000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718800000000-InitBetSettlementGuard';
-import { InitCompliance1718900000000 } from '../contexts/compliance/infrastructure/persistence/migrations/1718900000000-InitCompliance';
+import { ENTITIES, MIGRATIONS } from './schema';
 
-/** DataSource du CLI TypeORM (migration:run/revert). DATABASE_URL par défaut = POC local. */
+/**
+ * DataSource du CLI TypeORM (`migration:run`/`migration:revert`). Schéma = SOURCE UNIQUE `schema.ts`
+ * (mêmes entités/migrations que le runtime). `DATABASE_URL` via env ; défaut = Postgres local du
+ * `docker-compose` (identifiants de DEV, pas un secret) pour que les commandes CLI marchent
+ * out-of-the-box. Pool configurable via `DB_POOL_SIZE`.
+ */
+const DEV_LOCAL_URL = 'postgres://betnext:betnext@localhost:5432/betnext';
+const requested = Number(process.env.DB_POOL_SIZE ?? 10);
+const poolSize = Number.isFinite(requested) && requested > 0 ? requested : 10;
+
 export const AppDataSource = new DataSource({
   type: 'postgres',
-  url: process.env.DATABASE_URL ?? 'postgres://betnext:betnext@localhost:5432/betnext',
-  entities: [
-    BetRecord,
-    BetEventRecord,
-    OutboxRecord,
-    IdempotencyKeyRecord,
-    WalletRecord,
-    WalletOperationRecord,
-    ProcessedMessageRecord,
-  ],
-  migrations: [
-    InitBetting1718200000000,
-    InitWallet1718300000000,
-    InitOutbox1718400000000,
-    InitProcessedMessages1718500000000,
-    InitIdempotencyKeys1718600000000,
-    InitWalletOperations1718700000000,
-    InitBetSettlementGuard1718800000000,
-    InitCompliance1718900000000,
-  ],
+  url: process.env.DATABASE_URL ?? DEV_LOCAL_URL,
+  entities: ENTITIES,
+  migrations: MIGRATIONS,
   synchronize: false,
+  poolSize,
 });
 
 export default AppDataSource;
