@@ -7,3 +7,5 @@ export { WALLET_DEBIT_PORT } from './ports/WalletDebitPort';
 export type { WalletDebitPort } from './ports/WalletDebitPort';
 export { WALLET_CREDIT_PORT } from './ports/WalletCreditPort';
 export type { WalletCreditPort } from './ports/WalletCreditPort';
+export { STAKE_GUARD_PORT } from './ports/StakeGuardPort';
+export type { StakeGuardPort } from './ports/StakeGuardPort';

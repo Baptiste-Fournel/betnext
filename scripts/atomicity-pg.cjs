@@ -34,6 +34,11 @@ const { TypeOrmWalletCreditAdapter } = require('../dist/contexts/wallet/infrastr
 const { WalletOperationRecord } = require('../dist/contexts/wallet/infrastructure/persistence/WalletOperationRecord.js');
 const { InitWalletOperations1718700000000 } = require('../dist/contexts/wallet/infrastructure/persistence/migrations/1718700000000-InitWalletOperations.js');
 const { InitBetSettlementGuard1718800000000 } = require('../dist/contexts/betting/infrastructure/persistence/migrations/1718800000000-InitBetSettlementGuard.js');
+const { TypeOrmComplianceStore } = require('../dist/contexts/compliance/infrastructure/TypeOrmComplianceStore.js');
+const { ReserveStake } = require('../dist/contexts/compliance/application/ReserveStake.js');
+const { CompliancePolicyRegistry } = require('../dist/contexts/compliance/application/CompliancePolicyRegistry.js');
+const { DailyCapPolicy } = require('../dist/contexts/compliance/domain/DailyCapPolicy.js');
+const { InitCompliance1718900000000 } = require('../dist/contexts/compliance/infrastructure/persistence/migrations/1718900000000-InitCompliance.js');
 
 const DATA_DIR = '/tmp/pgdata_betnext_check';
 const PORT = 55434;
@@ -49,7 +54,7 @@ const PORT = 55434;
   const ds = new DataSource({
     type: 'postgres', host: '127.0.0.1', port: PORT, username: 'betnext', password: 'betnext', database: 'betnext',
     entities: [BetRecord, BetEventRecord, WalletRecord, WalletOperationRecord, OutboxRecord, ProcessedMessageRecord, IdempotencyKeyRecord],
-    migrations: [InitBetting1718200000000, InitWallet1718300000000, InitOutbox1718400000000, InitProcessedMessages1718500000000, InitIdempotencyKeys1718600000000, InitWalletOperations1718700000000, InitBetSettlementGuard1718800000000],
+    migrations: [InitBetting1718200000000, InitWallet1718300000000, InitOutbox1718400000000, InitProcessedMessages1718500000000, InitIdempotencyKeys1718600000000, InitWalletOperations1718700000000, InitBetSettlementGuard1718800000000, InitCompliance1718900000000],
   });
   await ds.initialize();
   await ds.runMigrations(); // joue le VRAI schéma (incl. trigger append-only)
@@ -60,7 +65,7 @@ const PORT = 55434;
   const uow = new TypeOrmUnitOfWork(ds, ctx);
   const odds = { currentOdds: async () => ({ value: Odds.of(2), provisional: false }) };
   let n = 0; const ids = { next: () => `bet-${++n}` };
-  const reset = async () => { await ds.query('TRUNCATE "bets", "bet_events", "outbox", "processed_messages", "idempotency_keys", "wallet_operations" RESTART IDENTITY'); await ds.getRepository(WalletRecord).save({ userId: 'u1', balance: 100 }); };
+  const reset = async () => { await ds.query('TRUNCATE "bets", "bet_events", "outbox", "processed_messages", "idempotency_keys", "wallet_operations", "rg_caps", "rg_daily_stakes" RESTART IDENTITY'); await ds.getRepository(WalletRecord).save({ userId: 'u1', balance: 100 }); };
 
   // 1) chemin nominal
   await reset();
@@ -275,6 +280,39 @@ const PORT = 55434;
   assert.strictEqual(await betStatusOf('cc1'), 'WON');
   assert.strictEqual(await balanceOf('u1'), 120); // crédité une seule fois
   console.log('\u2713 settlement CONCURRENT : 1 seul BetWon (index unique partiel), credit 1 fois (solde 120)');
+
+  // 17) PLAFOND QUOTIDIEN (BET-13) : 2 paris concurrents pres du plafond -> seul le total autorise passe
+  await reset();
+  const compliance = new TypeOrmComplianceStore(ds, ctx);
+  await compliance.setDailyCap('u1', 30); // plafond 30
+  const guard = new ReserveStake(compliance, new CompliancePolicyRegistry([new DailyCapPolicy()]));
+  const capRace = await Promise.allSettled([
+    new PlaceBet(bets, odds, wallet, { next: () => 'capA' }, uow, guard).execute({ userId: 'u1', outcomeId: 'o1', stake: 20 }),
+    new PlaceBet(bets, odds, wallet, { next: () => 'capB' }, uow, guard).execute({ userId: 'u1', outcomeId: 'o1', stake: 20 }),
+  ]);
+  assert.strictEqual(capRace.filter((r) => r.status === 'fulfilled').length, 1); // un seul passe (20<=30)
+  assert.strictEqual(capRace.filter((r) => r.status === 'rejected').length, 1); // l'autre refuse (40>30)
+  assert.strictEqual((await ds.query('SELECT count(*)::int AS c FROM bets'))[0].c, 1); // 1 seul pari
+  assert.strictEqual(await balanceOf('u1'), 80); // debite une seule fois
+  assert.strictEqual(Number((await ds.query('SELECT staked FROM rg_daily_stakes WHERE "userId"=$1', ['u1']))[0].staked), 20); // total du jour = 20 (pas 40)
+  console.log('\u2713 plafond quotidien : 2 paris concurrents pres du plafond -> seul le total autorise passe (anti-course FOR UPDATE)');
+
+  // 18) IDEMPOTENCE + PLAFOND : retry meme cle -> mise comptee UNE fois dans le total du jour
+  await reset();
+  const compliance2 = new TypeOrmComplianceStore(ds, ctx);
+  await compliance2.setDailyCap('u1', 100);
+  const guard2 = new ReserveStake(compliance2, new CompliancePolicyRegistry([new DailyCapPolicy()]));
+  const idemGuarded = new IdempotentPlaceBet(
+    new PlaceBet(bets, odds, wallet, { next: () => 'idemcap' }, uow, guard2),
+    new TypeOrmIdempotencyStore(ds, ctx),
+    uow,
+  );
+  const capInp = { userId: 'u1', outcomeId: 'o1', stake: 30 };
+  await idemGuarded.execute({ ...capInp, idempotencyKey: 'cap-idem', requestHash: hashOf(capInp) });
+  await idemGuarded.execute({ ...capInp, idempotencyKey: 'cap-idem', requestHash: hashOf(capInp) }); // retry meme cle
+  assert.strictEqual(Number((await ds.query('SELECT staked FROM rg_daily_stakes WHERE "userId"=$1', ['u1']))[0].staked), 30); // comptee UNE fois (pas 60)
+  assert.strictEqual((await ds.query('SELECT count(*)::int AS c FROM bets'))[0].c, 1);
+  console.log('\u2713 idempotence + plafond : retry meme cle -> mise comptee une fois (staked=30, 1 pari)');
 
   await ds.destroy();
   await pg.stop();

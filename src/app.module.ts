@@ -8,6 +8,7 @@ import { BettingModule } from './contexts/betting/betting.module';
 import { PricingModule } from './contexts/pricing/pricing.module';
 import { WalletModule } from './contexts/wallet/wallet.module';
 import { CatalogModule } from './contexts/catalog/catalog.module';
+import { ComplianceModule } from './contexts/compliance/compliance.module';
 import { HealthController } from './health/HealthController';
 import { DomainExceptionFilter } from './shared/http/DomainExceptionFilter';
 
@@ -26,6 +27,7 @@ import { DomainExceptionFilter } from './shared/http/DomainExceptionFilter';
     PricingModule,
     WalletModule,
     CatalogModule,
+    ComplianceModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: DomainExceptionFilter }],

@@ -4,6 +4,7 @@ import { OddsProvider } from './ports/OddsProvider';
 import { IdGenerator } from './ports/IdGenerator';
 import { UnitOfWork } from './ports/UnitOfWork';
 import { WalletDebitPort } from '../../../shared-kernel/ports/WalletDebitPort';
+import { StakeGuardPort } from '../../../shared-kernel/ports/StakeGuardPort';
 
 export interface PlaceBetInput {
   userId: string;
@@ -19,16 +20,17 @@ export interface PlaceBetOutput {
   pricingProvisional?: boolean;
 }
 
+/** Garde de mise par défaut : no-op (chemins/tests sans Responsible Gaming). En prod : injecté. */
+const NO_STAKE_GUARD: StakeGuardPort = { reserve: async (): Promise<void> => undefined };
+
 /**
- * Use case applicatif (dépend uniquement de ports). ADR-003 / BET-5 : le débit wallet, l'INSERT
- * du pari et l'append des événements s'exécutent dans UNE SEULE transaction via `UnitOfWork` →
- * tout-ou-rien (jamais de débit sans pari, jamais de pari sans débit, aucun event orphelin).
- * Le wallet est débité via son PORT partagé (jamais d'accès direct à ses tables — frontière de
- * contexte respectée même en monolithe).
- *
- * Idempotence : le débit n'est PAS idempotent à ce stade. BET-8 propagera une clé fournie par le
- * CLIENT (header Idempotency-Key) jusqu'au port ; le `betId` (regénéré à chaque appel) ne peut PAS
- * dédoublonner un retry. D'ici là, une fenêtre de double-débit subsiste au retry HTTP.
+ * Use case applicatif (dépend uniquement de ports). Dans UNE SEULE transaction (ADR-003 / BET-5) :
+ * (1) RÉSERVE la mise auprès de Responsible Gaming (plafond quotidien — BET-13), (2) DÉBITE le
+ * wallet via son port partagé, (3) INSÈRE le pari + ses événements → tout-ou-rien (un refus de
+ * plafond ou un solde insuffisant roule TOUT en arrière). La cote vient du read-model (BET-10) et
+ * est FIGÉE à la pose. L'idempotence HTTP (anti double-débit au retry) est portée par BET-18.
+ * Le garde de mise est optionnel (défaut no-op) ; en prod, le StakeGuardPort de Compliance est
+ * injecté et sa réservation est ATOMIQUE avec la pose (verrou → anti-course sur le plafond).
  */
 export class PlaceBet {
   constructor(
@@ -37,6 +39,7 @@ export class PlaceBet {
     private readonly wallet: WalletDebitPort,
     private readonly ids: IdGenerator,
     private readonly uow: UnitOfWork,
+    private readonly stakeGuard: StakeGuardPort = NO_STAKE_GUARD,
   ) {}
 
   async execute(input: PlaceBetInput): Promise<PlaceBetOutput> {
@@ -51,6 +54,7 @@ export class PlaceBet {
     });
 
     await this.uow.withTransaction(async () => {
+      await this.stakeGuard.reserve(input.userId, input.stake, new Date());
       await this.wallet.debit(input.userId, input.stake, betId);
       await this.bets.save(bet);
     });

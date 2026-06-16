@@ -214,3 +214,44 @@ describe('BetNext settlement (e2e, BET-12)', () => {
       .expect(400);
   });
 });
+
+/**
+ * BET-13 — plafond quotidien (Responsible Gaming) : le joueur fixe son plafond, et un pari qui ferait
+ * dépasser le total misé du jour est refusé (403). (L'atomicité/anti-course est prouvée sur vrai Postgres.)
+ */
+describe('BetNext plafond quotidien (e2e, BET-13)', () => {
+  let app: INestApplication;
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = moduleRef.createNestApplication();
+    await app.init();
+  });
+  afterAll(async () => {
+    await app.close();
+  });
+
+  const place = (key: string, userId: string, stake: number) =>
+    request(app.getHttpServer())
+      .post('/bets')
+      .set('Idempotency-Key', key)
+      .send({ userId, outcomeId: 'o1', stake });
+
+  it('plafond défini : refus (403) du pari qui dépasse le total misé du jour', async () => {
+    await request(app.getHttpServer())
+      .put('/responsible-gaming/daily-cap')
+      .send({ userId: 'cap-u', cap: 50 })
+      .expect(200);
+    await place('cap-1', 'cap-u', 20).expect(201); // total 20
+    await place('cap-2', 'cap-u', 20).expect(201); // total 40
+    await place('cap-3', 'cap-u', 20).expect(403); // 60 > 50 → refusé (DailyCapExceededError)
+  });
+
+  it('plafond <= 0 → 422 (invariant) ; aucun plafond défini → aucun refus', async () => {
+    await request(app.getHttpServer())
+      .put('/responsible-gaming/daily-cap')
+      .send({ userId: 'cap-u', cap: -5 })
+      .expect(422);
+    await place('nocap-1', 'nocap-u', 90).expect(201); // pas de plafond → autorisé
+  });
+});

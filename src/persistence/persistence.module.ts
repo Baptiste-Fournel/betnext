@@ -15,6 +15,7 @@ import { InitProcessedMessages1718500000000 } from '../messaging/migrations/1718
 import { InitIdempotencyKeys1718600000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718600000000-InitIdempotencyKeys';
 import { InitWalletOperations1718700000000 } from '../contexts/wallet/infrastructure/persistence/migrations/1718700000000-InitWalletOperations';
 import { InitBetSettlementGuard1718800000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718800000000-InitBetSettlementGuard';
+import { InitCompliance1718900000000 } from '../contexts/compliance/infrastructure/persistence/migrations/1718900000000-InitCompliance';
 
 const ENTITIES = [
   BetRecord,
@@ -33,6 +34,7 @@ const MIGRATIONS = [
   InitIdempotencyKeys1718600000000,
   InitWalletOperations1718700000000,
   InitBetSettlementGuard1718800000000,
+  InitCompliance1718900000000,
 ];
 
 /**

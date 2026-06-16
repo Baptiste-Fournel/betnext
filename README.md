@@ -249,6 +249,35 @@ règlement concurrent → 1 seul event**.
 > `POST /markets/settle` ; l'alternative est un **event Game Integration** consommé sur le bus — la
 > couture (`SettleMarket`) reste identique, seul l'adapter d'entrée changerait.
 
+## Plafond quotidien — jeu responsable (BET-13)
+
+Le contexte **Responsible Gaming** possède le plafond quotidien de mise. Le joueur le définit, et à
+chaque pose un pari qui ferait dépasser le **total misé du jour** est refusé (**403**).
+
+```bash
+curl -X PUT http://localhost:3000/responsible-gaming/daily-cap \
+  -H "Content-Type: application/json" -d '{"userId":"u1","cap":50}'   # → {"userId":"u1","dailyCap":50}
+```
+
+- **Règle externalisée (Open/Closed, ADR-010)** : le plafond est une **POLICY enfichable**
+  (`DailyCapPolicy`, 1re vraie règle enregistrée). Ajouter une règle (plafond hebdo, cooling-off) =
+  un nouveau fichier de policy + 1 entrée dans la liste `COMPLIANCE_POLICIES` du module — le registre
+  et le use case `ReserveStake` restent **inchangés**.
+- **Frontière** : Betting appelle la vérification via le **port partagé** `StakeGuardPort` ; aucun
+  accès direct aux tables RG (et RG ne lit pas les tables Betting).
+- **Atomique / anti-course** : la réservation tourne **dans la transaction de pose**, AVANT le débit ;
+  `SELECT … FOR UPDATE` sur la ligne du jour sérialise les paris concurrents → **deux paris près du
+  plafond ne peuvent pas le dépasser ensemble**. Un refus roule **tout** en arrière (ni débit ni pari).
+- **Idempotence** : un retry (même `Idempotency-Key`) ne compte la mise qu'**une fois**.
+
+Preuves : unitaires (policy, `ReserveStake`) + e2e in-memory (403 au-delà, cap ≤ 0 → 422, sans cap →
+illimité) + **vrai Postgres** (`npm run test:atomicity:pg`, cas 17-18) : 2 paris concurrents près du
+plafond → seul le total autorisé passe ; retry même clé → mise comptée une fois.
+
+> **Hypothèses / limites (signalées)** : le « jour » = **date UTC** (reset minuit UTC), fuseau à
+> trancher ; le total est **brut** — pas encore **net** des annulations/remboursements (un pari VOID
+> ne libère pas le plafond ; nécessiterait que le règlement appelle un *release* RG → suivi séparé).
+
 ## Approche TDD
 
 Les règles de domaine sont écrites en **test-first** et restent indépendantes du framework :
@@ -296,3 +325,9 @@ joueur sur Postgres (`GET /bets/:id`) ; cote **figée** préservée ; cold cache
 (`failedBetIds`), **annulation = remboursement exact**, events terminaux **immuables** (journal posé
 → réglé), paiement à **cote figée** (P&L fixed-odds borné). Prouvé sur **vrai Postgres** (cas 13→16,
 dont **règlement concurrent → 1 seul event**).
+
+**BET-13 livré** : **plafond quotidien** (Responsible Gaming) via **couture Policy injectée**
+(`DailyCapPolicy` = 1re règle ; ajouter une règle = fichier + 1 entrée, zéro réécriture) ; vérif via
+**port partagé** (frontière) ; **atomique / anti-course** (`FOR UPDATE`, dans la tx de pose) → **403**
+au dépassement ; idempotent. Prouvé sur **vrai Postgres** (cas 17-18). Limites signalées : « jour »
+UTC, total **brut** (net-of-void = suivi).

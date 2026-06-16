@@ -16,6 +16,7 @@ import { UNIT_OF_WORK, UnitOfWork } from './application/ports/UnitOfWork';
 import { IDEMPOTENCY_STORE, IdempotencyStore } from './application/ports/IdempotencyStore';
 import { WALLET_DEBIT_PORT, WalletDebitPort } from '../../shared-kernel/ports/WalletDebitPort';
 import { WALLET_CREDIT_PORT, WalletCreditPort } from '../../shared-kernel/ports/WalletCreditPort';
+import { STAKE_GUARD_PORT, StakeGuardPort } from '../../shared-kernel/ports/StakeGuardPort';
 import { TransactionContext } from '../../persistence/TransactionContext';
 import { ODDS_READ_MODEL, OddsReadModel } from '../../read-model/OddsReadModel';
 import { InMemoryBetRepository } from './infrastructure/InMemoryBetRepository';
@@ -73,13 +74,15 @@ export const BETTING_TOKENS = {
         wallet: WalletDebitPort,
         ids: IdGenerator,
         uow: UnitOfWork,
-      ): PlaceBet => new PlaceBet(bets, odds, wallet, ids, uow),
+        stakeGuard: StakeGuardPort,
+      ): PlaceBet => new PlaceBet(bets, odds, wallet, ids, uow, stakeGuard),
       inject: [
         BET_REPOSITORY,
         BETTING_TOKENS.OddsProvider,
         WALLET_DEBIT_PORT,
         BETTING_TOKENS.IdGenerator,
         UNIT_OF_WORK,
+        STAKE_GUARD_PORT,
       ],
     },
     {
