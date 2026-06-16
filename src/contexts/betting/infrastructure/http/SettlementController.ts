@@ -1,7 +1,42 @@
 import { BadRequestException, Body, Controller, HttpCode, Post } from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiBody,
+  ApiOkResponse,
+  ApiProperty,
+  ApiPropertyOptional,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CommandBus } from '@nestjs/cqrs';
 import { SettleMarketCommand } from '../../application/SettleMarketCommand';
 import { SettleMarketResult } from '../../application/SettleMarket';
+
+/** Corps de règlement : toutes les issues du marché + l'issue gagnante (ou annulation). */
+class SettleMarketRequest {
+  @ApiProperty({ type: [String], example: ['lol-finale-a', 'lol-finale-b', 'lol-finale-draw'] })
+  outcomes!: string[];
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'lol-finale-a' })
+  winningOutcomeId?: string | null;
+  @ApiPropertyOptional({ example: false, description: 'true = annulation (remboursement)' })
+  voided?: boolean;
+  @ApiPropertyOptional({ example: 'WINNING_OUTCOME' })
+  strategyKey?: string;
+}
+/** Résultat du règlement (comptes par statut + ids des paris en échec). */
+class SettleMarketResultDto {
+  @ApiProperty({ example: 2 })
+  settled!: number;
+  @ApiProperty({ example: 0 })
+  failed!: number;
+  @ApiProperty({ example: 1 })
+  won!: number;
+  @ApiProperty({ example: 1 })
+  lost!: number;
+  @ApiProperty({ example: 0 })
+  voided!: number;
+  @ApiProperty({ type: [String], example: [] })
+  failedBetIds!: string[];
+}
 
 interface SettleBody {
   outcomes?: unknown;
@@ -11,18 +46,25 @@ interface SettleBody {
 }
 
 /**
- * Adapter HTTP de RÈGLEMENT, déclenché par le GESTIONNAIRE à la clôture d'un marché.
- * HYPOTHÈSE NON VALIDÉE (signalée) : ici le résultat est publié par le manager via cet endpoint ;
- * l'alternative est un event de Game Integration consommé sur le bus — la couture (SettleMarket)
- * reste identique, seul l'adapter d'entrée changerait.
+ * Adapter HTTP de RÈGLEMENT, déclenché par le GESTIONNAIRE à la clôture d'un marché. Le front envoie
+ * l'action (issue gagnante / annulation) ; le RÈGLEMENT (statuts, payout, events) reste dans le back
+ * (BET-12). HYPOTHÈSE NON VALIDÉE (signalée) : résultat publié par le manager via cet endpoint ;
+ * alternative = event Game Integration sur le bus (même couture SettleMarket).
  */
+@ApiTags('markets')
 @Controller('markets')
 export class SettlementController {
   constructor(private readonly commandBus: CommandBus) {}
 
   @Post('settle')
   @HttpCode(200)
-  settle(@Body() body: SettleBody): Promise<SettleMarketResult> {
+  @ApiBody({ type: SettleMarketRequest })
+  @ApiOkResponse({
+    type: SettleMarketResultDto,
+    description: 'Règlement effectué (comptes par statut)',
+  })
+  @ApiBadRequestResponse({ description: 'outcomes vide, ou winningOutcomeId manquant sans voided' })
+  settle(@Body() body: SettleBody): Promise<SettleMarketResultDto> {
     const { outcomes, winningOutcomeId, voided, strategyKey } = this.validate(body);
     return this.commandBus.execute<SettleMarketCommand, SettleMarketResult>(
       new SettleMarketCommand(outcomes, winningOutcomeId, voided, strategyKey),
@@ -54,6 +96,8 @@ export class SettlementController {
     if (outcomes.length === 0) errors.push('outcomes (string[] non vide) requis');
     if (!voided && winningOutcomeId === null)
       errors.push('winningOutcomeId requis si voided=false');
+    if (!voided && winningOutcomeId !== null && !outcomes.includes(winningOutcomeId))
+      errors.push('winningOutcomeId doit faire partie de outcomes');
     if (errors.length > 0) throw new BadRequestException(errors);
 
     return { outcomes, winningOutcomeId, voided, strategyKey };
