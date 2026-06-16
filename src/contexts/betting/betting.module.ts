@@ -6,6 +6,8 @@ import { PlaceBet } from './application/PlaceBet';
 import { IdempotentPlaceBet } from './application/IdempotentPlaceBet';
 import { PlaceBetHandler } from './application/PlaceBetHandler';
 import { GetBetHandler } from './application/GetBetHandler';
+import { ListBetsHandler } from './application/ListBetsHandler';
+import { GetBetHistoryHandler } from './application/GetBetHistoryHandler';
 import { SettleMarket } from './application/SettleMarket';
 import { SettleMarketHandler } from './application/SettleMarketHandler';
 import { SettlementStrategyFactory } from './application/SettlementStrategyFactory';
@@ -111,6 +113,8 @@ export const BETTING_TOKENS = {
     },
     PlaceBetHandler,
     GetBetHandler,
+    ListBetsHandler,
+    GetBetHistoryHandler,
     SettleMarketHandler,
   ],
   exports: [PlaceBet, IdempotentPlaceBet, SettleMarket],

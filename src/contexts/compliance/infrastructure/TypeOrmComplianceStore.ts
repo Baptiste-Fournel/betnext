@@ -46,6 +46,13 @@ export class TypeOrmComplianceStore implements ComplianceStore {
     );
   }
 
+  async currentCap(userId: string): Promise<number | null> {
+    const rows = await this.manager().query('SELECT "dailyCap" FROM rg_caps WHERE "userId" = $1', [
+      userId,
+    ]);
+    return rows.length > 0 ? Number(rows[0].dailyCap) : null;
+  }
+
   private requireManager(): EntityManager {
     const manager = this.context.getManager();
     if (!manager) {

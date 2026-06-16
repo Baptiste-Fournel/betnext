@@ -12,6 +12,7 @@ import { CompliancePolicy } from './domain/CompliancePolicy';
 import { DailyCapPolicy } from './domain/DailyCapPolicy';
 import { ReserveStake } from './application/ReserveStake';
 import { SetDailyCap } from './application/SetDailyCap';
+import { GetDailyCap } from './application/GetDailyCap';
 import { TypeOrmComplianceStore } from './infrastructure/TypeOrmComplianceStore';
 import { InMemoryComplianceStore } from './infrastructure/InMemoryComplianceStore';
 import { ComplianceController } from './infrastructure/http/ComplianceController';
@@ -50,6 +51,11 @@ import { ComplianceController } from './infrastructure/http/ComplianceController
     {
       provide: SetDailyCap,
       useFactory: (store: ComplianceStore): SetDailyCap => new SetDailyCap(store),
+      inject: [COMPLIANCE_STORE],
+    },
+    {
+      provide: GetDailyCap,
+      useFactory: (store: ComplianceStore): GetDailyCap => new GetDailyCap(store),
       inject: [COMPLIANCE_STORE],
     },
   ],

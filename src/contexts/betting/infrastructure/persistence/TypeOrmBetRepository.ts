@@ -71,6 +71,13 @@ export class TypeOrmBetRepository implements BetRepository {
     });
   }
 
+  async list(): Promise<Bet[]> {
+    const rows = await this.manager()
+      .getRepository(BetRecord)
+      .find({ order: { createdAt: 'DESC' }, take: 100 });
+    return rows.map((row) => this.toBet(row));
+  }
+
   async findPendingByOutcomes(outcomeIds: string[]): Promise<Bet[]> {
     if (outcomeIds.length === 0) {
       return [];
@@ -78,18 +85,7 @@ export class TypeOrmBetRepository implements BetRepository {
     const rows = await this.manager()
       .getRepository(BetRecord)
       .find({ where: { status: BetStatus.Pending, outcomeId: In(outcomeIds) } });
-    return rows.map((row) =>
-      Bet.restore({
-        id: row.id,
-        userId: row.userId,
-        outcomeId: row.outcomeId,
-        stake: Number(row.stake),
-        lockedOdds: Odds.of(Number(row.lockedOdds)),
-        potentialGain: Number(row.potentialGain),
-        status: row.status as BetStatus,
-        createdAt: row.createdAt,
-      }),
-    );
+    return rows.map((row) => this.toBet(row));
   }
 
   async history(betId: string): Promise<StoredBetEvent[]> {
@@ -104,6 +100,19 @@ export class TypeOrmBetRepository implements BetRepository {
       payload: JSON.parse(r.payload) as unknown,
       occurredAt: r.occurredAt,
     }));
+  }
+
+  private toBet(row: BetRecord): Bet {
+    return Bet.restore({
+      id: row.id,
+      userId: row.userId,
+      outcomeId: row.outcomeId,
+      stake: Number(row.stake),
+      lockedOdds: Odds.of(Number(row.lockedOdds)),
+      potentialGain: Number(row.potentialGain),
+      status: row.status as BetStatus,
+      createdAt: row.createdAt,
+    });
   }
 
   private manager(): EntityManager {

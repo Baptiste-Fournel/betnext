@@ -20,4 +20,8 @@ export class InMemoryComplianceStore implements ComplianceStore {
   async setDailyCap(userId: string, cap: number): Promise<void> {
     this.caps.set(userId, cap);
   }
+
+  async currentCap(userId: string): Promise<number | null> {
+    return this.caps.has(userId) ? (this.caps.get(userId) as number) : null;
+  }
 }

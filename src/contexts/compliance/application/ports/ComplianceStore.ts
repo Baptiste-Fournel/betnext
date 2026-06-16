@@ -14,4 +14,6 @@ export interface ComplianceStore {
   loadForReserve(userId: string, day: string): Promise<DailyReservation>;
   addStake(userId: string, day: string, stake: number): Promise<void>;
   setDailyCap(userId: string, cap: number): Promise<void>;
+  /** Plafond courant (null si non défini) — lecture pour l'écran responsible gaming. */
+  currentCap(userId: string): Promise<number | null>;
 }

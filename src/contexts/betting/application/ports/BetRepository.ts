@@ -21,6 +21,8 @@ export interface StoredBetEvent {
 export interface BetRepository {
   save(bet: Bet): Promise<void>;
   findById(id: string): Promise<Bet | null>;
+  /** Liste les paris (NON scopée utilisateur tant qu'Identity n'existe pas — dette tracée). */
+  list(): Promise<Bet[]>;
   /** Paris EN ATTENTE dont l'issue est dans la liste (sélection des paris d'un marché à régler). */
   findPendingByOutcomes(outcomeIds: string[]): Promise<Bet[]>;
   history(betId: string): Promise<StoredBetEvent[]>;

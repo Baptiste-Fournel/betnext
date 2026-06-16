@@ -11,6 +11,11 @@ class StubBetRepository implements BetRepository {
   async findById(): Promise<Bet | null> {
     return this.stored;
   }
+
+  async list(): Promise<Bet[]> {
+    return [];
+  }
+
   async findPendingByOutcomes(): Promise<Bet[]> {
     return [];
   }

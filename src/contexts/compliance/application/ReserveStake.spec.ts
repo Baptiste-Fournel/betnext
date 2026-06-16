@@ -24,6 +24,9 @@ class FakeStore implements ComplianceStore {
   async setDailyCap(userId: string, cap: number): Promise<void> {
     this.caps.set(userId, cap);
   }
+  async currentCap(userId: string): Promise<number | null> {
+    return this.caps.get(userId) ?? null;
+  }
   staked(userId: string, day: string): number {
     return this.stakes.get(`${userId}:${day}`) ?? 0;
   }
