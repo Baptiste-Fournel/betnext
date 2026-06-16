@@ -28,6 +28,12 @@ const { InitProcessedMessages1718500000000 } = require('../dist/messaging/migrat
 const { PlaceBet } = require('../dist/contexts/betting/application/PlaceBet.js');
 const { Bet } = require('../dist/contexts/betting/domain/Bet.js');
 const { Odds } = require('../dist/shared-kernel/domain/Odds.js');
+const { SettleMarket } = require('../dist/contexts/betting/application/SettleMarket.js');
+const { SettlementStrategyFactory } = require('../dist/contexts/betting/application/SettlementStrategyFactory.js');
+const { TypeOrmWalletCreditAdapter } = require('../dist/contexts/wallet/infrastructure/persistence/TypeOrmWalletCreditAdapter.js');
+const { WalletOperationRecord } = require('../dist/contexts/wallet/infrastructure/persistence/WalletOperationRecord.js');
+const { InitWalletOperations1718700000000 } = require('../dist/contexts/wallet/infrastructure/persistence/migrations/1718700000000-InitWalletOperations.js');
+const { InitBetSettlementGuard1718800000000 } = require('../dist/contexts/betting/infrastructure/persistence/migrations/1718800000000-InitBetSettlementGuard.js');
 
 const DATA_DIR = '/tmp/pgdata_betnext_check';
 const PORT = 55434;
@@ -42,8 +48,8 @@ const PORT = 55434;
 
   const ds = new DataSource({
     type: 'postgres', host: '127.0.0.1', port: PORT, username: 'betnext', password: 'betnext', database: 'betnext',
-    entities: [BetRecord, BetEventRecord, WalletRecord, OutboxRecord, ProcessedMessageRecord, IdempotencyKeyRecord],
-    migrations: [InitBetting1718200000000, InitWallet1718300000000, InitOutbox1718400000000, InitProcessedMessages1718500000000, InitIdempotencyKeys1718600000000],
+    entities: [BetRecord, BetEventRecord, WalletRecord, WalletOperationRecord, OutboxRecord, ProcessedMessageRecord, IdempotencyKeyRecord],
+    migrations: [InitBetting1718200000000, InitWallet1718300000000, InitOutbox1718400000000, InitProcessedMessages1718500000000, InitIdempotencyKeys1718600000000, InitWalletOperations1718700000000, InitBetSettlementGuard1718800000000],
   });
   await ds.initialize();
   await ds.runMigrations(); // joue le VRAI schéma (incl. trigger append-only)
@@ -54,7 +60,7 @@ const PORT = 55434;
   const uow = new TypeOrmUnitOfWork(ds, ctx);
   const odds = { currentOdds: async () => ({ value: Odds.of(2), provisional: false }) };
   let n = 0; const ids = { next: () => `bet-${++n}` };
-  const reset = async () => { await ds.query('TRUNCATE "bets", "bet_events", "outbox", "processed_messages", "idempotency_keys" RESTART IDENTITY'); await ds.getRepository(WalletRecord).save({ userId: 'u1', balance: 100 }); };
+  const reset = async () => { await ds.query('TRUNCATE "bets", "bet_events", "outbox", "processed_messages", "idempotency_keys", "wallet_operations" RESTART IDENTITY'); await ds.getRepository(WalletRecord).save({ userId: 'u1', balance: 100 }); };
 
   // 1) chemin nominal
   await reset();
@@ -211,6 +217,64 @@ const PORT = 55434;
   assert.ok(ok12.betId);
   assert.strictEqual(await betCount(), 1); // retry corrigé crée le pari
   console.log('\u2713 idempotence HTTP : retry apres echec (meme cle) -> cle non brulee, pari cree');
+
+  // 13/14/15) SETTLEMENT (BET-12) sur vrai Postgres
+  const credit = new TypeOrmWalletCreditAdapter(ctx);
+  const settle = new SettleMarket(bets, credit, new SettlementStrategyFactory(), uow);
+  const balanceOf = async (u) => Number((await ds.getRepository(WalletRecord).findOneOrFail({ where: { userId: u } })).balance);
+  const betStatusOf = async (id) => (await ds.query('SELECT status FROM bets WHERE id = $1', [id]))[0].status;
+
+  // 13) WON : credit a la cote figee, EXACTEMENT-UNE-FOIS (rejeu = meme solde) + event BetWon journalise
+  await reset();
+  await new PlaceBet(bets, odds, wallet, { next: () => 'sb1' }, uow).execute({ userId: 'u1', outcomeId: 'o1', stake: 20 });
+  let sr = await settle.execute({ outcomes: ['o1'], winningOutcomeId: 'o1', voided: false });
+  assert.strictEqual(sr.won, 1);
+  assert.strictEqual(await balanceOf('u1'), 120); // 100 - 20 (mise) + 40 (gain cote figee 2.0)
+  assert.strictEqual(await betStatusOf('sb1'), 'WON');
+  assert.strictEqual((await ds.query('SELECT count(*)::int AS c FROM bet_events WHERE "betId"=$1 AND type=$2', ['sb1', 'BetWon']))[0].c, 1);
+  await settle.execute({ outcomes: ['o1'], winningOutcomeId: 'o1', voided: false }); // rejeu
+  assert.strictEqual(await balanceOf('u1'), 120); // INCHANGE -> exactement-une-fois
+  assert.strictEqual((await ds.query("SELECT count(*)::int AS c FROM outbox WHERE type='BetWon'"))[0].c, 1); // 1 event publie
+  console.log('\u2713 settlement WON : credit exactement-une-fois (rejeu = solde 120), event BetWon journalise');
+
+  // 14) VOID : remboursement EXACT de la mise (rejeu = meme solde)
+  await reset();
+  await new PlaceBet(bets, odds, wallet, { next: () => 'sb2' }, uow).execute({ userId: 'u1', outcomeId: 'o1', stake: 20 });
+  await settle.execute({ outcomes: ['o1'], winningOutcomeId: null, voided: true });
+  assert.strictEqual(await balanceOf('u1'), 100); // mise remboursee a l'identique
+  await settle.execute({ outcomes: ['o1'], winningOutcomeId: null, voided: true }); // rejeu
+  assert.strictEqual(await balanceOf('u1'), 100);
+  console.log('\u2713 settlement VOID : remboursement EXACT de la mise (rejeu = solde 100)');
+
+  // 15) ATOMIQUE par pari + RESILIENT : un credit en echec rollback CE pari, les autres sont regles
+  await reset();
+  await ds.getRepository(WalletRecord).save({ userId: 'u2', balance: 100 });
+  await new PlaceBet(bets, odds, wallet, { next: () => 'ok1' }, uow).execute({ userId: 'u1', outcomeId: 'o1', stake: 20 });
+  await new PlaceBet(bets, odds, wallet, { next: () => 'boom1' }, uow).execute({ userId: 'u2', outcomeId: 'o1', stake: 20 });
+  const failingCredit = { credit: async (u, a, k) => { if (u === 'u2') throw new Error('credit boom'); return credit.credit(u, a, k); } };
+  sr = await new SettleMarket(bets, failingCredit, new SettlementStrategyFactory(), uow).execute({ outcomes: ['o1'], winningOutcomeId: 'o1', voided: false });
+  assert.strictEqual(sr.settled, 1);
+  assert.strictEqual(sr.failed, 1);
+  assert.strictEqual(await betStatusOf('ok1'), 'WON');
+  assert.strictEqual(await betStatusOf('boom1'), 'PENDING'); // pari en echec : rollback complet -> toujours en attente
+  assert.strictEqual(await balanceOf('u1'), 120); // gagnant credite
+  assert.strictEqual(await balanceOf('u2'), 80); // PAS credite (rollback) -> aucun mouvement errone
+  assert.strictEqual((await ds.query('SELECT count(*)::int AS c FROM wallet_operations WHERE "opKey"=$1', ['payout:boom1']))[0].c, 0);
+  assert.strictEqual((await ds.query("SELECT count(*)::int AS c FROM outbox WHERE type='BetWon'"))[0].c, 1); // seul ok1 a publie (boom1 rollback)
+  console.log('\u2713 settlement atomique+resilient : pari en echec rollback (PENDING, non credite), les autres regles');
+
+  // 16) règlement CONCURRENT du même marché -> 1 SEUL event BetWon (index unique) + crédit 1 fois
+  await reset();
+  await new PlaceBet(bets, odds, wallet, { next: () => 'cc1' }, uow).execute({ userId: 'u1', outcomeId: 'o1', stake: 20 });
+  const both = await Promise.allSettled([
+    settle.execute({ outcomes: ['o1'], winningOutcomeId: 'o1', voided: false }),
+    settle.execute({ outcomes: ['o1'], winningOutcomeId: 'o1', voided: false }),
+  ]);
+  assert.ok(both.every((r) => r.status === 'fulfilled')); // l'un règle, l'autre échoue PROPREMENT (résilience)
+  assert.strictEqual((await ds.query('SELECT count(*)::int AS c FROM bet_events WHERE "betId"=$1 AND type=$2', ['cc1', 'BetWon']))[0].c, 1);
+  assert.strictEqual(await betStatusOf('cc1'), 'WON');
+  assert.strictEqual(await balanceOf('u1'), 120); // crédité une seule fois
+  console.log('\u2713 settlement CONCURRENT : 1 seul BetWon (index unique partiel), credit 1 fois (solde 120)');
 
   await ds.destroy();
   await pg.stop();

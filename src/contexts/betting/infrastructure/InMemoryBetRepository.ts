@@ -1,4 +1,5 @@
 import { Bet } from '../domain/Bet';
+import { BetStatus } from '../domain/BetStatus';
 import { BetRepository, StoredBetEvent } from '../application/ports/BetRepository';
 
 /**
@@ -26,6 +27,13 @@ export class InMemoryBetRepository implements BetRepository {
 
   async findById(id: string): Promise<Bet | null> {
     return this.snapshots.get(id) ?? null;
+  }
+
+  async findPendingByOutcomes(outcomeIds: string[]): Promise<Bet[]> {
+    const wanted = new Set(outcomeIds);
+    return [...this.snapshots.values()].filter(
+      (bet) => bet.status === BetStatus.Pending && wanted.has(bet.outcomeId),
+    );
   }
 
   async history(betId: string): Promise<StoredBetEvent[]> {

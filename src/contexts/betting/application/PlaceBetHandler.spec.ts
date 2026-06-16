@@ -19,6 +19,10 @@ class InMemoryBets implements BetRepository {
   async findById(id: string): Promise<Bet | null> {
     return this.saved.find((b) => b.id === id) ?? null;
   }
+  async findPendingByOutcomes(): Promise<Bet[]> {
+    return [];
+  }
+
   async history(): Promise<StoredBetEvent[]> {
     return [];
   }

@@ -6,12 +6,16 @@ import { PlaceBet } from './application/PlaceBet';
 import { IdempotentPlaceBet } from './application/IdempotentPlaceBet';
 import { PlaceBetHandler } from './application/PlaceBetHandler';
 import { GetBetHandler } from './application/GetBetHandler';
+import { SettleMarket } from './application/SettleMarket';
+import { SettleMarketHandler } from './application/SettleMarketHandler';
+import { SettlementStrategyFactory } from './application/SettlementStrategyFactory';
 import { BET_REPOSITORY, BetRepository } from './application/ports/BetRepository';
 import { OddsProvider } from './application/ports/OddsProvider';
 import { IdGenerator } from './application/ports/IdGenerator';
 import { UNIT_OF_WORK, UnitOfWork } from './application/ports/UnitOfWork';
 import { IDEMPOTENCY_STORE, IdempotencyStore } from './application/ports/IdempotencyStore';
 import { WALLET_DEBIT_PORT, WalletDebitPort } from '../../shared-kernel/ports/WalletDebitPort';
+import { WALLET_CREDIT_PORT, WalletCreditPort } from '../../shared-kernel/ports/WalletCreditPort';
 import { TransactionContext } from '../../persistence/TransactionContext';
 import { ODDS_READ_MODEL, OddsReadModel } from '../../read-model/OddsReadModel';
 import { InMemoryBetRepository } from './infrastructure/InMemoryBetRepository';
@@ -23,6 +27,7 @@ import { InMemoryIdempotencyStore } from './infrastructure/InMemoryIdempotencySt
 import { ReadModelOddsProvider } from './infrastructure/ReadModelOddsProvider';
 import { UuidIdGenerator } from './infrastructure/UuidIdGenerator';
 import { BettingController } from './infrastructure/http/BettingController';
+import { SettlementController } from './infrastructure/http/SettlementController';
 
 export const BETTING_TOKENS = {
   OddsProvider: Symbol('OddsProvider'),
@@ -31,7 +36,7 @@ export const BETTING_TOKENS = {
 
 @Module({
   imports: [CqrsModule],
-  controllers: [BettingController],
+  controllers: [BettingController, SettlementController],
   providers: [
     {
       // BET-10 : la cote COURANTE vient du read-model Redis (projection des OddsUpdated).
@@ -86,9 +91,25 @@ export const BETTING_TOKENS = {
       ): IdempotentPlaceBet => new IdempotentPlaceBet(placeBet, store, uow),
       inject: [PlaceBet, IDEMPOTENCY_STORE, UNIT_OF_WORK],
     },
+    {
+      provide: SettlementStrategyFactory,
+      useFactory: (): SettlementStrategyFactory => new SettlementStrategyFactory(),
+    },
+    {
+      // BET-12 : règlement W/L/V via la couture Strategy, crédit exactement-une-fois.
+      provide: SettleMarket,
+      useFactory: (
+        bets: BetRepository,
+        credit: WalletCreditPort,
+        factory: SettlementStrategyFactory,
+        uow: UnitOfWork,
+      ): SettleMarket => new SettleMarket(bets, credit, factory, uow),
+      inject: [BET_REPOSITORY, WALLET_CREDIT_PORT, SettlementStrategyFactory, UNIT_OF_WORK],
+    },
     PlaceBetHandler,
     GetBetHandler,
+    SettleMarketHandler,
   ],
-  exports: [PlaceBet, IdempotentPlaceBet],
+  exports: [PlaceBet, IdempotentPlaceBet, SettleMarket],
 })
 export class BettingModule {}

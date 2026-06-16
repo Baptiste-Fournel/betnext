@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource, EntityManager, In } from 'typeorm';
 import { Bet } from '../../domain/Bet';
 import { BetStatus } from '../../domain/BetStatus';
 import { Odds } from '../../../../shared-kernel/domain/Odds';
@@ -69,6 +69,27 @@ export class TypeOrmBetRepository implements BetRepository {
       status: row.status as BetStatus,
       createdAt: row.createdAt,
     });
+  }
+
+  async findPendingByOutcomes(outcomeIds: string[]): Promise<Bet[]> {
+    if (outcomeIds.length === 0) {
+      return [];
+    }
+    const rows = await this.manager()
+      .getRepository(BetRecord)
+      .find({ where: { status: BetStatus.Pending, outcomeId: In(outcomeIds) } });
+    return rows.map((row) =>
+      Bet.restore({
+        id: row.id,
+        userId: row.userId,
+        outcomeId: row.outcomeId,
+        stake: Number(row.stake),
+        lockedOdds: Odds.of(Number(row.lockedOdds)),
+        potentialGain: Number(row.potentialGain),
+        status: row.status as BetStatus,
+        createdAt: row.createdAt,
+      }),
+    );
   }
 
   async history(betId: string): Promise<StoredBetEvent[]> {

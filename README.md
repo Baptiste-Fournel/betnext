@@ -210,6 +210,45 @@ projecteur → read-model → lecture, + out-of-order).
 > **Repoussé (tracé)** : atomicité multi-réplique du read-model (compare-and-set Lua) inutile au POC
 > mono-instance ; périmètre/ownership de lecture (auth) quand Identity sera implémenté.
 
+## Règlement (settlement) — fermer la boucle poser → résoudre → payer (BET-12)
+
+À la clôture d'un marché (`POST /markets/settle`), chaque pari en attente est résolu W/L/V via une
+**SettlementStrategy** (Strategy + Factory — ADR-009) : `WinningOutcomeStrategy` est la 1re vraie
+stratégie enregistrée ; **ajouter un type** de pari = un nouveau fichier de stratégie + 1
+enregistrement, **zéro réécriture** du règlement.
+
+```bash
+curl -X POST http://localhost:3000/markets/settle \
+  -H "Content-Type: application/json" \
+  -d '{"outcomes":["A","B","draw"],"winningOutcomeId":"A"}'   # ou {"outcomes":[...],"voided":true}
+# → {"settled":N,"won":..,"lost":..,"voided":..,"failed":..,"failedBetIds":[]}
+```
+
+Garanties money (mêmes que le débit) :
+
+- **Atomique par pari** : marquer + append event immuable (`BetWon`/`BetLost`/`BetVoided`) + créditer
+  dans **une transaction** ; un échec roule **tout** ce pari en arrière (reste `PENDING`, non crédité).
+- **Résilient** : l'échec d'un pari ne bloque pas les autres (par pari, pas de head-of-line blocking) ;
+  `failedBetIds` permet un rejeu ciblé.
+- **Exactement-une-fois** : crédit idempotent par `opKey` (garde-fou `wallet_operations`) **+** index
+  unique partiel `bet_events(betId)` sur les events terminaux → **rejeu/concurrence ⇒ 1 seul event,
+  1 seul crédit**.
+- **Annulation** = remboursement **exact** de la mise.
+
+**Modèle de paiement (tranché, ADR-009)** : paiement à la **cote figée** (`payout = potentialGain`
+stocké), cohérent avec le gel de la cote à la pose. P&L **fixed-odds** assumé, **borné** par le clamp
+des cotes `[1.10, 5.00]` → liability max = mise × 5. Le pari-mutuel de Pricing fixe la cote *offerte* ;
+une fois figée, le paiement est fixe → la maison porte le risque entre deux mises.
+
+Preuves : e2e in-memory (WON/LOST/VOID, rejeu idempotent, 400) + unitaires (stratégie, factory, use
+case) + **vrai Postgres** (`npm run test:atomicity:pg`, cas 13→16) : crédit exactement-une-fois
+(rejeu = même solde), event `BetWon` journalisé, remboursement exact, atomique+résilient, **et
+règlement concurrent → 1 seul event**.
+
+> **Hypothèse non validée (signalée)** : le résultat est publié par le **gestionnaire** via
+> `POST /markets/settle` ; l'alternative est un **event Game Integration** consommé sur le bus — la
+> couture (`SettleMarket`) reste identique, seul l'adapter d'entrée changerait.
+
 ## Approche TDD
 
 Les règles de domaine sont écrites en **test-first** et restent indépendantes du framework :
@@ -251,3 +290,9 @@ Prouvé en mémoire (jest) et sur **vrai Redis** en CI (`npm run test:pricing:re
 joueur sur Postgres (`GET /bets/:id`) ; cote **figée** préservée ; cold cache → 404 /
 `pricingProvisional` ; anti out-of-order (FIFO + garde monotone). Prouvé en mémoire (jest) et sur
 **vrai Redis** en CI (`npm run test:readmodel:redis`).
+
+**BET-12 livré** : **règlement** W/L/V via couture **Strategy** (1re stratégie enregistrée) — crédit
+**exactement-une-fois** (`opKey` + index unique partiel), **atomique par pari**, **résilient**
+(`failedBetIds`), **annulation = remboursement exact**, events terminaux **immuables** (journal posé
+→ réglé), paiement à **cote figée** (P&L fixed-odds borné). Prouvé sur **vrai Postgres** (cas 13→16,
+dont **règlement concurrent → 1 seul event**).

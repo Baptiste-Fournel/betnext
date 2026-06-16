@@ -151,3 +151,66 @@ describe('BetNext lecture / read-model (e2e, BET-10)', () => {
     expect(second.body.pricingProvisional).toBe(false); // read-model chaud → cote Pricing, non provisoire
   });
 });
+
+/**
+ * BET-12 — règlement : clôture d'un marché → paris gagné/perdu/annulé, statuts lisibles, rejeu
+ * idempotent. (Le crédit exactement-une-fois et l'atomicité par pari sont prouvés sur vrai Postgres.)
+ */
+describe('BetNext settlement (e2e, BET-12)', () => {
+  let app: INestApplication;
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = moduleRef.createNestApplication();
+    await app.init();
+  });
+  afterAll(async () => {
+    await app.close();
+  });
+
+  const place = (key: string, userId: string, outcomeId: string) =>
+    request(app.getHttpServer())
+      .post('/bets')
+      .set('Idempotency-Key', key)
+      .send({ userId, outcomeId, stake: 10 })
+      .expect(201);
+  const status = async (betId: string): Promise<string> =>
+    (await request(app.getHttpServer()).get(`/bets/${betId}`).expect(200)).body.status;
+
+  it('clôture marché : gagnant → WON, perdant → LOST', async () => {
+    const won = await place('s-w', 'sw', 'mA');
+    const lost = await place('s-l', 'sl', 'mB');
+    const res = await request(app.getHttpServer())
+      .post('/markets/settle')
+      .send({ outcomes: ['mA', 'mB'], winningOutcomeId: 'mA' })
+      .expect(200);
+    expect(res.body).toMatchObject({ settled: 2, won: 1, lost: 1, voided: 0, failed: 0 });
+    expect(await status(won.body.betId)).toBe('WON');
+    expect(await status(lost.body.betId)).toBe('LOST');
+  });
+
+  it('rejouer le règlement est idempotent (plus aucun pari en attente)', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/markets/settle')
+      .send({ outcomes: ['mA', 'mB'], winningOutcomeId: 'mA' })
+      .expect(200);
+    expect(res.body).toMatchObject({ settled: 0, won: 0, lost: 0 });
+  });
+
+  it('annulation → VOID (remboursement de la mise)', async () => {
+    const bet = await place('s-v', 'sv', 'mC');
+    const res = await request(app.getHttpServer())
+      .post('/markets/settle')
+      .send({ outcomes: ['mC'], voided: true })
+      .expect(200);
+    expect(res.body).toMatchObject({ settled: 1, voided: 1 });
+    expect(await status(bet.body.betId)).toBe('VOID');
+  });
+
+  it('règlement sans résultat ni annulation → 400', async () => {
+    await request(app.getHttpServer())
+      .post('/markets/settle')
+      .send({ outcomes: ['mX'] })
+      .expect(400);
+  });
+});

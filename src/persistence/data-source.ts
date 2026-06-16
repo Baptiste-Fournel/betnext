@@ -5,12 +5,15 @@ import { BetEventRecord } from '../contexts/betting/infrastructure/persistence/B
 import { OutboxRecord } from '../contexts/betting/infrastructure/persistence/OutboxRecord';
 import { IdempotencyKeyRecord } from '../contexts/betting/infrastructure/persistence/IdempotencyKeyRecord';
 import { WalletRecord } from '../contexts/wallet/infrastructure/persistence/WalletRecord';
+import { WalletOperationRecord } from '../contexts/wallet/infrastructure/persistence/WalletOperationRecord';
 import { ProcessedMessageRecord } from '../messaging/ProcessedMessageRecord';
 import { InitBetting1718200000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718200000000-InitBetting';
 import { InitWallet1718300000000 } from '../contexts/wallet/infrastructure/persistence/migrations/1718300000000-InitWallet';
 import { InitOutbox1718400000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718400000000-InitOutbox';
 import { InitProcessedMessages1718500000000 } from '../messaging/migrations/1718500000000-InitProcessedMessages';
 import { InitIdempotencyKeys1718600000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718600000000-InitIdempotencyKeys';
+import { InitWalletOperations1718700000000 } from '../contexts/wallet/infrastructure/persistence/migrations/1718700000000-InitWalletOperations';
+import { InitBetSettlementGuard1718800000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718800000000-InitBetSettlementGuard';
 
 /** DataSource du CLI TypeORM (migration:run/revert). DATABASE_URL par défaut = POC local. */
 export const AppDataSource = new DataSource({
@@ -22,6 +25,7 @@ export const AppDataSource = new DataSource({
     OutboxRecord,
     IdempotencyKeyRecord,
     WalletRecord,
+    WalletOperationRecord,
     ProcessedMessageRecord,
   ],
   migrations: [
@@ -30,6 +34,8 @@ export const AppDataSource = new DataSource({
     InitOutbox1718400000000,
     InitProcessedMessages1718500000000,
     InitIdempotencyKeys1718600000000,
+    InitWalletOperations1718700000000,
+    InitBetSettlementGuard1718800000000,
   ],
   synchronize: false,
 });
