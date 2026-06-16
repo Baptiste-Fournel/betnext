@@ -4,9 +4,10 @@ Projet d'architecture logicielle (ESGI, 4e année). Objectif : démontrer, par u
 tourne, une plateforme de paris e-sport **modulaire, scalable et multi-jeux**. Posture
 d'architecte : chaque choix est justifié et chaque compromis assumé.
 
-> Le dossier d'architecture complet (décisions, compromis, diagrammes) est dans
-> [`docs/architecture/decisions.md`](docs/architecture/decisions.md) et
-> [`docs/architecture/diagrams.md`](docs/architecture/diagrams.md).
+> Le dossier d'architecture complet (décisions, compromis, diagrammes, modèle de données) est dans
+> [`docs/architecture/decisions.md`](docs/architecture/decisions.md),
+> [`docs/architecture/diagrams.md`](docs/architecture/diagrams.md) et
+> [`docs/architecture/data-model.md`](docs/architecture/data-model.md) (tables + choix de conception).
 
 ## Architecture en bref
 
@@ -277,6 +278,71 @@ plafond → seul le total autorisé passe ; retry même clé → mise comptée u
 > **Hypothèses / limites (signalées)** : le « jour » = **date UTC** (reset minuit UTC), fuseau à
 > trancher ; le total est **brut** — pas encore **net** des annulations/remboursements (un pari VOID
 > ne libère pas le plafond ; nécessiterait que le règlement appelle un *release* RG → suivi séparé).
+
+## Front (Next.js) — BET-14 (épic)
+
+App **Next.js** (App Router, TS strict, Tailwind + shadcn/ui) dans `web/`, à côté du back. C'est un
+**client MINCE** : aucune logique métier (elle reste dans le domaine back). Détails : `web/README.md`.
+
+**Client API typé GÉNÉRÉ** (jamais écrit à la main), pipeline reproductible :
+
+```bash
+npm run api:contract   # (racine) back → packages/api-contract/openapi.json → web/src/lib/api/schema.d.ts
+cd web && npm install && npm run dev   # http://localhost:3001
+```
+
+- Contrat partagé : `packages/api-contract/openapi.json` (émis par le back via `@nestjs/swagger` ;
+  Swagger UI sur `/docs`).
+- Types : `web/src/lib/api/schema.d.ts` (`openapi-typescript`) ; client `openapi-fetch` type-safe
+  (`web/src/lib/api/client.ts`). Une **garde compile-time** (`contract.guard.ts`, vérifiée par le job
+  CI `web-typecheck`) prouve qu'un chemin hors-contrat est **rejeté à la compilation**.
+- **Frontière** : le front n'importe QUE le contrat généré, jamais le code interne du back.
+
+**Incrément 1** — écran connecté : appelle `GET /health` (URL API via `NEXT_PUBLIC_API_BASE_URL`).
+
+**Incrément 2** — 1er parcours joueur (poser un pari) : liste les marchés (`GET /markets`, 3 issues)
+et leur cote courante (`GET /odds/:id`, « indisponible » si read-model froid) ; pose un pari
+(`POST /bets`) avec un header **`Idempotency-Key`** généré par tentative et **réutilisé au retry**
+(anti double-débit) ; **affiche** la cote FIGÉE et le gain renvoyés par l'API (jamais recalculés) +
+un badge « cote d'ouverture » quand `pricingProvisional`. Endpoints `/markets`, `/odds/:id`,
+`POST /bets` désormais **annotés** (DTO Swagger) → typés dans le contrat (plus de `never`).
+
+**Incrément 3** — cotes en **direct (SSE)** : `GET /streams/odds` (NestJS `@Sse()`) STREAME les
+`OddsUpdated` **réels** (projecteur → flux in-process `OddsStream`, **pas de polling**) ; le front
+(`EventSource`) fait **bouger les cotes** de la liste en direct, gère la reconnexion + le read-model
+froid, et ferme le flux au démontage (cleanup). **Contraste cote-figée** : un pari posé garde sa cote
+(`lockedOdds`) affichée **à côté** de la cote live du marché (qui bouge). Payload SSE **typé**
+(`OddsLiveEventDto`, généré dans le contrat ; réponse `text/event-stream` — OpenAPI n'exprimant pas
+le SSE nativement). Désabonnement par client géré par Nest ; flux complété au shutdown.
+
+**Incrément 4** — historique &amp; plafond : **historique** des paris (`GET /bets`) avec leur
+**timeline d'états** (`GET /bets/:id/events`, posé → gagné/perdu/annulé) lue depuis le **journal
+d'événements** du back (Event Sourcing **visible** ; le front affiche, ne reconstruit pas) ;
+**plafond quotidien** consulté/défini (`GET`/`PUT /responsible-gaming/daily-cap`) ; le **403** de
+dépassement (BET-13) est mappé en feedback **clair** dans la pose. DTO de ces routes annotés (plus
+de `never`). **Dette tracée** : sans Identity, la liste `/bets` n'est **pas scopée** par joueur (le
+front ne simule pas d'auth).
+
+**Incrément 5** — parcours **gestionnaire** (vue `/manager`, distincte du joueur) : **créer un marché**
+**générique N-issues** (`POST /markets` — événement + N libellés d'issues, ≥ 2 ; le back valide et
+assigne les ids) ; **régler** un marché (`POST /markets/settle` annoté) en choisissant l'issue gagnante
+ou l'annulation → le back résout les paris (BET-12 : W/L/V, gains, events). Le front **envoie
+l'action**, il ne réimplémente ni le règlement ni le payout. L'historique (en bas de la vue) se
+rafraîchit après règlement → **boucle posé → gagné/perdu visible à l'écran**. Endpoints `POST /markets`
+et `POST /markets/settle` typés.
+
+**Incrément 6** — **polish** (aucune nouvelle fonctionnalité) : sur chaque vue (marchés, pose,
+historique, plafond, créer/régler) un état **chargement** (skeletons), **vide** (message clair) et
+**erreur** (message de l'API quand il existe — sinon « Impossible de joindre l'API » — + **réessayer**),
+y compris les échecs **réseau** (try/catch). **Responsive** (`flex-wrap`, paddings adaptatifs).
+**A11y** : régions `aria-live` persistantes / `role="alert"`, heure d'event via `<time dateTime>`,
+labels reliés (`aria-describedby`/`aria-invalid`), focus visible. Un échec de cote **ne masque plus**
+le marché (dégradation par issue → « cote indisponible »).
+
+> **Épic BET-14 : 6/6 incréments livrés.** Dette tracée (à reprendre avec Identity) : ni l'historique
+> ni le rôle gestionnaire ne sont scopés/authentifiés (le front ne simule pas d'auth) ; mineurs :
+> `GET /odds` par issue + timelines en N+1 (à batcher si volume) ; le message d'erreur préfixe le code
+> HTTP brut (cosmétique).
 
 ## Approche TDD
 
