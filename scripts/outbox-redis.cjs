@@ -23,11 +23,13 @@ const { BetRecord } = d('contexts/betting/infrastructure/persistence/BetRecord.j
 const { BetEventRecord } = d('contexts/betting/infrastructure/persistence/BetEventRecord.js');
 const { OutboxRecord } = d('contexts/betting/infrastructure/persistence/OutboxRecord.js');
 const { WalletRecord } = d('contexts/wallet/infrastructure/persistence/WalletRecord.js');
+const { WalletOperationRecord } = d('contexts/wallet/infrastructure/persistence/WalletOperationRecord.js');
 const { ProcessedMessageRecord } = d('messaging/ProcessedMessageRecord.js');
 const { InitBetting1718200000000 } = d('contexts/betting/infrastructure/persistence/migrations/1718200000000-InitBetting.js');
 const { InitWallet1718300000000 } = d('contexts/wallet/infrastructure/persistence/migrations/1718300000000-InitWallet.js');
 const { InitOutbox1718400000000 } = d('contexts/betting/infrastructure/persistence/migrations/1718400000000-InitOutbox.js');
 const { InitProcessedMessages1718500000000 } = d('messaging/migrations/1718500000000-InitProcessedMessages.js');
+const { InitWalletOperations1718700000000 } = d('contexts/wallet/infrastructure/persistence/migrations/1718700000000-InitWalletOperations.js');
 const { PlaceBet } = d('contexts/betting/application/PlaceBet.js');
 const { Odds } = d('shared-kernel/domain/Odds.js');
 const { OutboxRelay } = d('messaging/OutboxRelay.js');
@@ -50,8 +52,8 @@ async function waitFor(cond, timeout) {
   await pg.initialise(); await pg.start(); await pg.createDatabase('betnext');
   const ds = new DataSource({
     type: 'postgres', host: '127.0.0.1', port: PGPORT, username: 'betnext', password: 'betnext', database: 'betnext',
-    entities: [BetRecord, BetEventRecord, WalletRecord, OutboxRecord, ProcessedMessageRecord],
-    migrations: [InitBetting1718200000000, InitWallet1718300000000, InitOutbox1718400000000, InitProcessedMessages1718500000000],
+    entities: [BetRecord, BetEventRecord, WalletRecord, WalletOperationRecord, OutboxRecord, ProcessedMessageRecord],
+    migrations: [InitBetting1718200000000, InitWallet1718300000000, InitOutbox1718400000000, InitProcessedMessages1718500000000, InitWalletOperations1718700000000],
   });
   await ds.initialize(); await ds.runMigrations();
   await ds.getRepository(WalletRecord).save({ userId: 'u1', balance: 100 });
