@@ -116,6 +116,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReconciliationController_run"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wallet/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["WalletController_open"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/markets": {
         parameters: {
             query?: never;
@@ -260,6 +292,56 @@ export interface components {
             voided: number;
             /** @example [] */
             failedBetIds: string[];
+        };
+        WalletDriftDto: {
+            /** @example demo-player */
+            userId: string;
+            /**
+             * @description Σ(ledger) = solde attendu (autoritaire)
+             * @example 80
+             */
+            expectedBalance: number;
+            /**
+             * @description wallets.balance (stocké)
+             * @example 130
+             */
+            actualBalance: number;
+            /**
+             * @description actual − expected (signé)
+             * @example 50
+             */
+            difference: number;
+        };
+        ReconciliationReportDto: {
+            /** @example 2026-06-16T10:00:00.000Z */
+            checkedAt: string;
+            /** @example 3 */
+            walletsChecked: number;
+            /**
+             * @description true si aucun écart détecté
+             * @example true
+             */
+            balanced: boolean;
+            /** @description wallets en dérive (vide si balanced) */
+            drifts: components["schemas"]["WalletDriftDto"][];
+        };
+        OpenWalletRequest: {
+            /** @example demo-player */
+            userId: string;
+            /**
+             * @description Solde d'ouverture (>= 0)
+             * @example 100
+             */
+            openingBalance: number;
+        };
+        OpenWalletResultDto: {
+            /** @example demo-player */
+            userId: string;
+            /**
+             * @description false si le wallet existait déjà (idempotent)
+             * @example true
+             */
+            opened: boolean;
         };
         OutcomeDto: {
             /** @example lol-finale-a */
@@ -513,6 +595,63 @@ export interface operations {
             };
             /** @description outcomes vide, ou winningOutcomeId manquant sans voided */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReconciliationController_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rapport de réconciliation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationReportDto"];
+                };
+            };
+        };
+    };
+    WalletController_open: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenWalletRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenWalletResultDto"];
+                };
+            };
+            /** @description Corps invalide (userId/openingBalance) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solde d'ouverture invalide (doit être >= 0) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

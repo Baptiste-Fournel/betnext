@@ -344,6 +344,42 @@ le marché (dégradation par issue → « cote indisponible »).
 > `GET /odds` par issue + timelines en N+1 (à batcher si volume) ; le message d'erreur préfixe le code
 > HTTP brut (cosmétique).
 
+## Réconciliation argent — filet « zéro perte » (BET-15)
+
+BET-5/7/12/18 garantissent l'absence de perte sur les chemins nominaux et de retry. La réconciliation
+est le **filet** qui détecte toute dérive qui aurait malgré tout échappé.
+
+```bash
+curl http://localhost:3000/admin/reconciliation
+# → {"checkedAt":"…","walletsChecked":3,"balanced":true,"drifts":[]}
+```
+
+- **Source autoritaire explicite = le ledger `wallet_operations`** (et non une estimation dérivée d'un
+  autre contexte). Le ledger journalise désormais **tous** les mouvements signés (ouverture `OPENING`,
+  débit `DEBIT` négatif, crédit `CREDIT`), chacun écrit **dans la même transaction** que le solde →
+  invariant **`Σ(amount) == balance`** à chaque commit.
+- **Détection + rapport, AUCUNE auto-correction** : le job est en **lecture seule** (donc rejouable —
+  idempotent, pas de double-rapport) et liste les wallets en dérive (`expected` = Σ ledger, `actual` =
+  solde, `difference`). Corriger de l'argent doit être une **action revue**, pas un effet de bord.
+- **Frontière respectée** : la réconciliation reste **entièrement dans le contexte Wallet** (lit
+  seulement `wallets` + `wallet_operations`, une **seule requête** = instantané cohérent). Aucune
+  lecture cross-contexte.
+- **« En vol » ≠ dérive** : l'asynchrone (Outbox/BullMQ) ne transporte que des **événements**, jamais
+  l'argent ; un Outbox non drainé n'a bougé ni le solde ni le ledger → **aucun faux positif**.
+- **Alimentation** : `POST /wallet/open` ouvre un wallet en écrivant atomiquement le solde **et** son
+  entrée d'ouverture (origine du ledger).
+
+Preuves : unitaires (`ReconcileWallets`, `InmemoryWalletAdapter`, `OpenWallet`) + **vrai Postgres**
+(`npm run test:reconciliation:pg`) : ouverture, cycle complet open→pari→règlement (Σ=solde), **en vol**
+(Outbox non drainé → balanced), **dérive injectée** (+50 hors ledger → détectée et rapportée sans
+correction), **idempotence** (rejeu = rapport identique, 0 écriture), **multi-wallets** (seul le dérivé
+rapporté). Non-régression money-safety : `npm run test:atomicity:pg` (18 cas, débit désormais journalisé).
+
+> **Limites (tracées)** : pas d'**alerting** ni de workflow de correction (action manuelle) ; ouverture
+> **unique** par wallet (pas de dépôts multiples) et `POST /wallet/open` **sans auth** (comme tout le
+> POC, à durcir avec Identity) ; purge de `wallet_operations` à faire **sans casser l'invariant**
+> (snapshot de solde requis).
+
 ## Approche TDD
 
 Les règles de domaine sont écrites en **test-first** et restent indépendantes du framework :
@@ -397,3 +433,14 @@ dont **règlement concurrent → 1 seul event**).
 **port partagé** (frontière) ; **atomique / anti-course** (`FOR UPDATE`, dans la tx de pose) → **403**
 au dépassement ; idempotent. Prouvé sur **vrai Postgres** (cas 17-18). Limites signalées : « jour »
 UTC, total **brut** (net-of-void = suivi).
+
+**BET-14 livré (épic 6/6)** : front Next.js (App Router, TS strict, Tailwind + shadcn/ui) type-safe
+sur le **contrat OpenAPI généré** ; parcours joueur (marchés N-issues, cote live SSE, pose à cote figée,
+historique/timeline, plafond) et gestionnaire (créer/régler) ; états loading/vide/erreur + responsive.
+
+**BET-15 livré** : **réconciliation argent** — le ledger `wallet_operations` journalise désormais
+**tous** les mouvements **signés** (ouverture/débit/crédit, dans la même tx que le solde) → invariant
+**`Σ(amount) == balance`** ; `GET /admin/reconciliation` produit un **rapport** (lecture seule,
+idempotent, **sans auto-correction**), **intra-Wallet** (frontière), insensible à l'async **en vol**.
+Prouvé sur **vrai Postgres** (`npm run test:reconciliation:pg` : dérive injectée détectée sans
+correction, idempotence, multi-wallets) + non-régression `test:atomicity:pg` (débit journalisé).

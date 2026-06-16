@@ -168,7 +168,7 @@ sequenceDiagram
             S-->>J: 201 Confirme
         end
     end
-    Note over S,DB: Reconciliation periodique : somme(transactions) = solde ; tout debit a sa contrepartie
+    Note over S,DB: Reconciliation (BET-15, implementee -- section 7) : invariant somme(ledger signe) = solde, sur demande, sans auto-correction
 ```
 
 *Garde anti double-crédit :* la transition `PENDING -> COMPENSATING` est appliquée en **compare-and-set atomique** ; un pari déjà `WON`/`LOST` refuse la compensation (ADR-004).
@@ -192,3 +192,22 @@ stateDiagram-v2
 ```
 
 *Settlement polymorphe (ADR-009) : `SettlementStrategy` produit un statut d'issue riche (`WON`/`LOST`/`VOID`/`PARTIAL`) au lieu du booléen `isWinner()` du legacy (`BettingService.php:80`), pour absorber un jeu non-binaire ou un nouveau type de pari.*
+
+## 7. Réconciliation argent — ledger autoritaire & invariant Σ = solde (BET-15)
+
+Filet de la garantie « zéro perte après réconciliation » (ADR-013). **Chaque** mouvement (ouverture, débit, crédit) écrit une **ligne signée** dans `wallet_operations` **dans la même transaction** que l'`UPDATE` du solde → l'invariant `Σ(amount) == balance` tient à chaque commit. Le job lit les deux côtés (**une seule requête** = instantané cohérent) et **rapporte** les écarts sans rien corriger.
+
+```mermaid
+flowchart LR
+    subgraph tx["Chaque mouvement = 1 transaction atomique (contexte Wallet)"]
+        op["Ouverture / Pose (debit) / Reglement (credit)"]
+        op -->|"ligne SIGNEE : OPENING + / DEBIT - / CREDIT +"| ledger[("wallet_operations<br/>ledger autoritaire")]
+        op -->|"UPDATE balance (meme tx)"| bal[("wallets.balance")]
+    end
+    recon["ReconcileWallets<br/>GET /admin/reconciliation<br/>lecture seule, idempotent"]
+    ledger -->|"SUM(amount)"| recon
+    bal -->|"balance"| recon
+    recon -->|"ecart abs >= 1 centime ?"| report["Rapport : balanced + drifts[]<br/>SIGNALE, ne corrige pas"]
+```
+
+*Choix (ADR-013) :* source autoritaire = **le ledger** (pas une estimation cross-contexte → réconciliation **intra-Wallet**, frontière respectée) ; **pas d'auto-correction** (action revue, pas un effet de bord) ; **async en vol ≠ dérive** (l'Outbox/BullMQ ne porte que des **événements**, jamais l'argent → un Outbox non drainé n'a bougé ni solde ni ledger). Prouvé sur vrai Postgres (`npm run test:reconciliation:pg` : dérive injectée détectée sans correction, idempotence, multi-wallets).

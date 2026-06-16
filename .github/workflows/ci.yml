@@ -34,6 +34,8 @@ jobs:
         run: npm run build
       - name: Atomicité sur Postgres réel (zéro perte — défi 3)
         run: node scripts/atomicity-pg.cjs
+      - name: Réconciliation argent sur Postgres réel (filet zéro perte — BET-15)
+        run: node scripts/reconciliation-pg.cjs
       - name: Outbox → BullMQ → consommateur (vrai Redis)
         run: node scripts/outbox-redis.cjs
         env:

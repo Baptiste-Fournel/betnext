@@ -238,6 +238,23 @@ Plafond quotidien configurable **par joueur**, calculé **net des annulations/re
 
 ---
 
+### ADR-013 — Réconciliation argent : ledger autoritaire **signé** + rapport **sans auto-correction** (BET-15)
+
+**Décision.** Le **filet** de la promesse « zéro perte **après réconciliation** » (condition d'ADR-004/008) est **implémenté**. Le ledger `wallet_operations` devient le **journal autoritaire de TOUS les mouvements signés** (ouverture `OPENING`, débit `DEBIT` négatif, crédit/remboursement `CREDIT`), chaque ligne écrite **dans la même transaction** que l'`UPDATE` du solde → invariant **`Σ(amount) == balance`** vrai à chaque commit. Un job **sur demande** (`GET /admin/reconciliation`, schedulable) compare, pour chaque wallet, Σ(ledger) au solde stocké (**une seule requête** = instantané cohérent) et **rapporte** les écarts. **Aucune auto-correction** : le job est en **lecture seule** (rejouable, idempotent, pas de double-rapport) ; corriger de l'argent est une action **revue**, pas un effet de bord.
+
+**Alternatives écartées.** (a) *Solde attendu dérivé des events de pari (Betting)* : franchit la frontière Wallet→Betting, c'est une **estimation** d'un autre contexte (le sujet veut une source autoritaire) et ignore les mouvements non-pari → rejeté au profit du ledger **propre au Wallet**. (b) *Réconciliation crédits-seuls (l'état antérieur)* : ne couvrait pas les débits → ne prouve pas Σ=solde → non autoritaire. (c) *Auto-correction du solde par le job* : effet de bord qui déplace de l'argent sans revue → interdit.
+
+**Compromis.**
+- **Gain** : source autoritaire **explicite et locale** (zéro lecture cross-contexte → frontière respectée) ; dérive **détectable**, y compris causée par une corruption hors application ; insensible à l'**async en vol** — l'Outbox/BullMQ ne transporte que des événements, jamais l'argent, donc un Outbox non drainé n'a bougé ni le solde ni le ledger (aucun faux positif).
+- **Perte** : le **débit passe sur le chemin chaud journalisé** (un INSERT de plus par pose) et devient exactement-une-fois ; une dérive détectée exige une **action manuelle** (pas d'alerting ni de workflow de correction dans le POC) ; l'invariant n'est qu'une **égalité de sommes** — il ne vérifie pas que *chaque débit de pari a sa contrepartie de règlement* (contrôle par-pari distinct, **non implémenté**).
+- **Condition** : tout mouvement DOIT écrire sa ligne ledger **dans la transaction** du solde (sinon faux écart) ; toute **purge** de `wallet_operations` doit préserver l'invariant (snapshot de solde requis) ; l'ouverture de wallet écrit son **entrée d'ouverture**.
+
+**Preuve.** `npm run test:reconciliation:pg` sur **vrai Postgres** : ouverture, cycle open→pari→règlement (Σ=solde), **en vol** (Outbox non drainé → balanced), **dérive injectée** (+50 hors ledger → détectée/rapportée, **non corrigée**), **idempotence** (rejeu = rapport identique, 0 écriture), **multi-wallets**. Non-régression money-safety : `test:atomicity:pg` (18 cas, débit désormais journalisé). Arbitrage de la **source autoritaire** tranché explicitement avec le porteur du projet.
+
+**Ancrage.** Auditeur argent (compensation ≠ rollback, double-crédit) ; condition posée par ADR-004/ADR-008 ; ledger legacy `WalletService.php:40-64` qui ne tracait pas le cycle de vie.
+
+---
+
 ## 4. Risques résiduels & questions probables du jury
 
 ### 4.1 Risques résiduels (fragile / à valider)
@@ -245,17 +262,17 @@ Plafond quotidien configurable **par joueur**, calculé **net des annulations/re
 - **Coefficients de l'entonnoir de charge à affiner** : l'ancrage spectateurs est sourcé, mais la pénétration (p) et le taux de pari (b) sont des hypothèses. Le dimensionnement suit des **paliers** (ADR-012) ; l'async se défend d'abord par le **découplage d'écriture** (preuve), pas par la perf brute.
 - **C3 satisfaite sur 1 frontière** : Wallet/Betting restent co-déployés (choix d'atomicité, ADR-003). Assumé, mais c'est l'angle d'attaque n°1.
 - **Cohérence éventuelle des cotes** (ADR-007) : en pré-match seulement ; **non tenable tel quel en live** (latency betting) — extension live = travail supplémentaire (suspension/seuil).
-- **Idempotence & réconciliation** : la garantie « zéro perte » devient « zéro perte **après réconciliation** » ; le **job de réconciliation** et la dédup consommateur doivent réellement exister, pas seulement être cités.
+- **Idempotence & réconciliation** : la garantie « zéro perte » devient « zéro perte **après réconciliation** ». Le **job existe désormais** (BET-15 / ADR-013 : `GET /admin/reconciliation`, invariant `Σ(ledger) == solde` prouvé sur vrai Postgres) et la dédup consommateur aussi (`processed_messages`). Résiduel : pas d'**alerting** ni de **correction** automatisée (action manuelle revue), et l'invariant est une **égalité de sommes** — le contrôle *par-pari* « tout débit a sa contrepartie » reste à ajouter.
 - **Snapshot vs journal** (ADR-005) : invariant « snapshot dérivable du journal » à tester, sinon divergence silencieuse.
 - **Démo multi-process fragile** : Postgres + Redis + workers + service Pricing → `docker-compose` unique + **captures vidéo de secours** de chaque parcours.
 - **Charge cognitive junior** : le **plan de formation** doit séquencer les patterns ; risque réel si un seul développeur doit tout maintenir.
-- **Settlement enrichi non démontré** : `VOID`/`PARTIAL` sont conçus (ADR-009) mais le POC ne montrera probablement que `WON`/`LOST`/`VOID` simple.
+- **Settlement** : `WON`/`LOST`/`VOID` **livrés** (BET-12, couture Strategy, crédit exactement-une-fois, remboursement exact) ; `PARTIAL` reste un **statut** que la couture peut produire, **sans** logique de partial-payout implémentée (ADR-009).
 
 ### 4.2 Questions que le jury posera (et la ligne de défense)
 
 1. **« Un monolithe, et vous parlez de déploiement indépendant ? »** → C3 reformulée en *capacité de découpe* ; **preuve falsifiable** : Pricing extrait avec contrat réseau + Outbox + état propre. Les workers BullMQ se scalent déjà indépendamment.
 2. **« Pourquoi l'asynchrone pour une simple division ? »** → Pas le CPU : le legacy recalcule **dans la transaction de pari** (`BettingService.php:62`) et **sérialise** les écritures sur l'événement chaud. L'async protège `placeBet`. Charge **déduite** (entonnoir sourcé) et dimensionnement par **paliers** (ADR-012).
-3. **« Où l'argent peut-il se perdre ? »** → Nulle part sur le chemin par défaut : **atomique en une transaction Postgres** (ADR-003). Pour le paiement externe : Saga + idempotence consommateur + compensation gardée + réconciliation. « Zéro perte après réconciliation ».
+3. **« Où l'argent peut-il se perdre ? »** → Nulle part sur le chemin par défaut : **atomique en une transaction Postgres** (ADR-003). Et en **filet** : la **réconciliation est implémentée** (BET-15 / ADR-013) — ledger signé autoritaire, invariant `Σ(ledger) == solde`, dérive **détectée et rapportée sans auto-correction** (prouvé sur vrai Postgres, dérive injectée comprise). Pour le paiement externe : Saga + idempotence consommateur + compensation gardée. « Zéro perte **après réconciliation** » — désormais démontrable, pas seulement promis.
 4. **« Event Sourcing : surdimensionné ? »** → ES **ciblé sur Bet**, **light** (journal + snapshot autoritatif) ; on nomme le besoin de **rejeu** (reconstruction de projections, litige à T) ; sinon on aurait gardé un simple ledger.
 5. **« Ajouter un jeu/type de pari = vraiment zéro code ? »** → Non : **additif et localisé**. On montre `BetTypeStrategy` + `SettlementStrategy` + statut d'issue ; on assume le point d'enregistrement et l'ACL par fournisseur.
 6. **« Changer une règle légale sans redéployer ? »** → Oui pour les **paramètres** (table validée, hot-reload, audit — ex. 48 h) ; non pour une **logique nouvelle** (code + déploiement).

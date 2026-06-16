@@ -243,6 +243,64 @@
         ]
       }
     },
+    "/admin/reconciliation": {
+      "get": {
+        "operationId": "ReconciliationController_run",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Rapport de réconciliation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationReportDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reconciliation"
+        ]
+      }
+    },
+    "/wallet/open": {
+      "post": {
+        "operationId": "WalletController_open",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenWalletRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenWalletResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide (userId/openingBalance)"
+          },
+          "422": {
+            "description": "Solde d'ouverture invalide (doit être >= 0)"
+          }
+        },
+        "tags": [
+          "wallet"
+        ]
+      }
+    },
     "/markets": {
       "get": {
         "operationId": "CatalogController_list",
@@ -638,6 +696,104 @@
           "lost",
           "voided",
           "failedBetIds"
+        ]
+      },
+      "WalletDriftDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "example": "demo-player"
+          },
+          "expectedBalance": {
+            "type": "number",
+            "example": 80,
+            "description": "Σ(ledger) = solde attendu (autoritaire)"
+          },
+          "actualBalance": {
+            "type": "number",
+            "example": 130,
+            "description": "wallets.balance (stocké)"
+          },
+          "difference": {
+            "type": "number",
+            "example": 50,
+            "description": "actual − expected (signé)"
+          }
+        },
+        "required": [
+          "userId",
+          "expectedBalance",
+          "actualBalance",
+          "difference"
+        ]
+      },
+      "ReconciliationReportDto": {
+        "type": "object",
+        "properties": {
+          "checkedAt": {
+            "type": "string",
+            "example": "2026-06-16T10:00:00.000Z"
+          },
+          "walletsChecked": {
+            "type": "number",
+            "example": 3
+          },
+          "balanced": {
+            "type": "boolean",
+            "example": true,
+            "description": "true si aucun écart détecté"
+          },
+          "drifts": {
+            "description": "wallets en dérive (vide si balanced)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WalletDriftDto"
+            }
+          }
+        },
+        "required": [
+          "checkedAt",
+          "walletsChecked",
+          "balanced",
+          "drifts"
+        ]
+      },
+      "OpenWalletRequest": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "example": "demo-player"
+          },
+          "openingBalance": {
+            "type": "number",
+            "example": 100,
+            "minimum": 0,
+            "description": "Solde d'ouverture (>= 0)"
+          }
+        },
+        "required": [
+          "userId",
+          "openingBalance"
+        ]
+      },
+      "OpenWalletResultDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "example": "demo-player"
+          },
+          "opened": {
+            "type": "boolean",
+            "example": true,
+            "description": "false si le wallet existait déjà (idempotent)"
+          }
+        },
+        "required": [
+          "userId",
+          "opened"
         ]
       },
       "OutcomeDto": {

@@ -238,27 +238,50 @@ CREATE TABLE IF NOT EXISTS "wallets" (
 - Débité **uniquement** via le port partagé `WalletDebitPort` (jamais d'accès direct par Betting) →
   frontière de contexte respectée même en monolithe.
 
-### 3.2 `wallet_operations` — crédit **exactement-une-fois** + ledger (BET-12)
+### 3.2 `wallet_operations` — ledger append-only de **tous** les mouvements (BET-12 + BET-15)
 
 ```sql
 CREATE TABLE IF NOT EXISTS "wallet_operations" (
   "opKey" varchar PRIMARY KEY,
   "userId" varchar NOT NULL,
-  "amount" numeric(14,2) NOT NULL,
-  "kind" varchar NOT NULL,
+  "amount" numeric(14,2) NOT NULL,   -- montant SIGNÉ : débit < 0, crédit/ouverture > 0
+  "kind" varchar NOT NULL,           -- OPENING | DEBIT | CREDIT
   "createdAt" timestamptz NOT NULL DEFAULT now()
 );
 ```
 
-**Rôle** : garantir qu'un **crédit** (gain `payout:<betId>` ou remboursement `refund:<betId>`) n'est
-appliqué qu'**une seule fois**, même sous rejeu/re-livraison.
+**Rôle** : **ledger autoritaire** des mouvements d'argent. Chaque mutation de solde y écrit une ligne
+**signée** dans la **même transaction** que l'`UPDATE` du solde → l'invariant **Σ(`amount`) == `balance`**
+tient à chaque commit. C'est la source de vérité de la **réconciliation** (BET-15) et le garde-fou
+**exactement-une-fois** de tout mouvement.
 
 **Choix de conception**
-- `opKey` en **PK** = garde-fou exactement-une-fois : crédit = `INSERT opKey ON CONFLICT DO NOTHING`
-  puis `UPDATE balance += amount` **seulement si** l'insert a pris ; rejouer le règlement laisse le solde
-  **identique** (prouvé `atomicity-pg`, cas « settlement WON : rejeu = même solde »).
-- Sert aussi de **piste d'audit** des crédits (`kind`, `amount`, `createdAt`) — utile au futur job de
-  réconciliation (BET-15, Σ transactions = solde).
+- **Montant signé** (débit négatif, crédit/ouverture positif) : la réconciliation se réduit à un simple
+  `SUM(amount)` comparé au solde, sans dépendre de l'énumération des `kind`.
+- `opKey` en **PK** = exactement-une-fois pour **chaque** mouvement, avec une clé déterministe par
+  origine : `opening:<userId>` (ouverture), `stake:<betId>` (débit de pose), `payout:<betId>` /
+  `refund:<betId>` (crédit de règlement). Mouvement = `INSERT opKey ON CONFLICT DO NOTHING` **puis**
+  modification du solde **seulement si** l'insert a pris → rejeu/retry/re-livraison ⇒ no-op (ni
+  double-débit ni double-crédit ; prouvé `atomicity-pg` et `reconciliation-pg`).
+- **Débit ET crédit symétriques** (BET-15) : auparavant seuls les crédits étaient tracés et le crédit ne
+  vérifiait pas l'`affected`. Désormais le débit écrit sa ligne `DEBIT` négative avant l'`UPDATE`
+  conditionnel (`balance >= mise`) **et** le crédit vérifie aussi l'`affected` de son `UPDATE`. Dans les
+  deux cas, **0 ligne affectée ⇒ on lève ⇒ rollback du mouvement** (même tx) : jamais de ligne
+  **orpheline** (mouvement écrit sans contrepartie de solde) ni d'argent perdu en silence.
+- **Entrée d'ouverture** (`OPENING`) : un wallet est ouvert/alimenté en écrivant atomiquement la ligne
+  `wallets` **et** sa ligne d'ouverture → le ledger est complet dès l'origine (sinon le solde initial
+  serait une fausse dérive).
+- **Réconciliation `ReconcileWallets`** (BET-15) : pour chaque wallet, compare `SUM(amount)` au solde
+  stocké (une **seule requête** = instantané cohérent) et **rapporte** les écarts. La requête est un
+  **`FULL OUTER JOIN`** `wallets` ↔ agrégat ledger : on contrôle les deux côtés, donc une ligne de ledger
+  **orpheline** (un `userId` du ledger sans `wallets`) est elle aussi rapportée (solde 0 vs Σ ≠ 0) au lieu
+  d'échapper à un `LEFT JOIN` parti de `wallets`. Choix assumés —
+  **lecture seule** (rejouable, idempotent), **aucune auto-correction** (corriger de l'argent est une
+  action revue, pas un effet de bord), **source autoritaire = ce ledger** (réconciliation **intra-Wallet**,
+  zéro lecture cross-contexte). L'asynchrone (Outbox/BullMQ) ne transporte que des **événements**, jamais
+  l'argent ⇒ un Outbox non drainé n'a bougé ni le solde ni le ledger ⇒ **aucune fausse dérive** (prouvé
+  `reconciliation-pg` : ouverture, cycle complet, en-vol, dérive injectée détectée sans correction,
+  idempotence, multi-wallets).
 
 ---
 
@@ -326,7 +349,8 @@ port partagé `StakeGuardPort`, sans accès à ces tables).
 | UPDATE conditionnel `balance >= montant` | `wallets` | Pas de lost update au débit | Défi 1 (concurrence) |
 | Trigger `bet_events_no_mutation` | `bet_events` | Journal **immuable** (UPDATE/DELETE rejetés) | Défi 2 (traçabilité) |
 | Index unique partiel `uniq_bet_settlement_event` | `bet_events` | ≤ 1 event terminal/pari (anti double-règlement concurrent) | Défi 3 (zéro erreur) |
-| PK `opKey` (`INSERT ON CONFLICT`) | `wallet_operations` | Crédit **exactement-une-fois** | Défi 3 |
+| PK `opKey` (`INSERT ON CONFLICT`) | `wallet_operations` | **Tout** mouvement (débit/crédit/ouverture) **exactement-une-fois** | Défi 3 |
+| Ledger signé `Σ(amount) == balance` (écrit dans la même tx que le solde) | `wallet_operations` + `wallets` | Invariant **réconciliable** → dérive détectable (BET-15) | Défi 3 (filet zéro perte) |
 | PK `messageId` | `processed_messages` | Consommateur **idempotent** (at-least-once) | Défi 3 |
 | PK `key` + `requestHash` | `idempotency_keys` | Anti **double-débit** au retry HTTP | Défi 3 |
 | Ligne outbox **dans la tx** + index partiel non-publiés | `outbox` | Pas de dual-write (fenêtre de perte fermée) | Défi 3 |
@@ -361,7 +385,14 @@ Hors schéma relationnel : Redis n'est **jamais** autoritatif ni utilisé pour l
   brancher sur le règlement (release RG sur `VOID`).
 - **Frontière « jour » = UTC** (`rg_daily_stakes.day`) — hypothèse à valider (fuseau / reset).
 - **Pas de TTL/purge** sur `outbox` (publiées), `processed_messages`, `idempotency_keys`,
-  `wallet_operations` — tables qui croissent ; rétention = tâche d'exploitation ultérieure.
+  `wallet_operations` — tables qui croissent ; rétention = tâche d'exploitation ultérieure. Pour
+  `wallet_operations`, la rétention devra **préserver l'invariant** (purger sans compactage des soldes
+  fausserait `Σ(amount) == balance`) — *à traiter* (snapshot de solde + purge des mouvements antérieurs).
+- **Réconciliation sans auto-correction** (BET-15) — *gain* : aucune écriture d'argent en effet de bord,
+  job rejouable ; *perte* : une dérive détectée exige une **action manuelle revue** (le job ne répare pas) ;
+  *condition* : alerting/branchement de la correction = travail ultérieur (hors POC).
+- **Alimentation des wallets** : `POST /wallet/open` est sans auth (comme tout le POC) et l'ouverture est
+  **unique** par wallet (pas de dépôts multiples) — suffisant pour la démo, à durcir avec Identity.
 - **Mode mémoire (sans `DATABASE_URL`)** : adapters iso-sémantiques pour le POC/tests ; les garanties
   *niveau base* (trigger, index uniques, `FOR UPDATE`) ne valent que sur Postgres → prouvées en CI sur
   vrai Postgres, pas en `pg-mem`.
