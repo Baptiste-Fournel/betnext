@@ -1,0 +1,757 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "HealthController_check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Service vivant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/odds/{outcomeId}": {
+      "get": {
+        "operationId": "OddsReadController_current",
+        "parameters": [
+          {
+            "name": "outcomeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "lol-finale-a",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cote courante (read-model)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentOddsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Read-model froid : aucune cote encore projetée"
+          }
+        },
+        "tags": [
+          "odds"
+        ]
+      }
+    },
+    "/streams/odds": {
+      "get": {
+        "operationId": "OddsStreamController_odds",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Flux SSE (text/event-stream) : un message par MAJ ; data = OddsLiveEventDto (JSON).",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/OddsLiveEventDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "streams"
+        ]
+      }
+    },
+    "/bets": {
+      "post": {
+        "operationId": "BettingController_place",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Clé par tentative, réutilisée au retry HTTP (anti double-débit).",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaceBetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Pari posé (cote figée)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceBetResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Même Idempotency-Key réutilisée avec un corps différent"
+          }
+        },
+        "tags": [
+          "bets"
+        ]
+      },
+      "get": {
+        "operationId": "BettingController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Liste des paris (non scopée — voir dette Identity)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BetViewDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "bets"
+        ]
+      }
+    },
+    "/bets/{id}": {
+      "get": {
+        "operationId": "BettingController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BetViewDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Pari introuvable"
+          }
+        },
+        "tags": [
+          "bets"
+        ]
+      }
+    },
+    "/bets/{id}/events": {
+      "get": {
+        "operationId": "BettingController_events",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Timeline du pari (journal append-only)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BetEventDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "bets"
+        ]
+      }
+    },
+    "/markets/settle": {
+      "post": {
+        "operationId": "SettlementController_settle",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettleMarketRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Règlement effectué (comptes par statut)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettleMarketResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "outcomes vide, ou winningOutcomeId manquant sans voided"
+          }
+        },
+        "tags": [
+          "markets"
+        ]
+      }
+    },
+    "/markets": {
+      "get": {
+        "operationId": "CatalogController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Marchés ouverts (modèle N-issues)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MarketDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "catalog"
+        ]
+      },
+      "post": {
+        "operationId": "CatalogController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMarketRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Marché créé",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide (name/game/outcomes)"
+          },
+          "422": {
+            "description": "Marché invalide (≥ 2 issues requises)"
+          }
+        },
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/responsible-gaming/daily-cap": {
+      "get": {
+        "operationId": "ComplianceController_get",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "example": "demo-player",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyCapDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "query userId manquant"
+          }
+        },
+        "tags": [
+          "responsible-gaming"
+        ]
+      },
+      "put": {
+        "operationId": "ComplianceController_set",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDailyCapRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyCapDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide (userId/cap)"
+          },
+          "422": {
+            "description": "Plafond invalide (doit être > 0)"
+          }
+        },
+        "tags": [
+          "responsible-gaming"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "BetNext API",
+    "description": "Contrat OpenAPI du back BetNext — source du client TYPÉ du front (généré, non écrit à la main).",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "ok"
+          },
+          "service": {
+            "type": "string",
+            "example": "betnext"
+          },
+          "timestamp": {
+            "type": "string",
+            "example": "2026-06-16T00:00:00.000Z"
+          }
+        },
+        "required": [
+          "status",
+          "service",
+          "timestamp"
+        ]
+      },
+      "CurrentOddsDto": {
+        "type": "object",
+        "properties": {
+          "outcomeId": {
+            "type": "string",
+            "example": "lol-finale-a"
+          },
+          "odds": {
+            "type": "number",
+            "example": 2
+          }
+        },
+        "required": [
+          "outcomeId",
+          "odds"
+        ]
+      },
+      "OddsLiveEventDto": {
+        "type": "object",
+        "properties": {
+          "outcomeId": {
+            "type": "string",
+            "example": "lol-finale-a"
+          },
+          "odds": {
+            "type": "number",
+            "example": 2.35
+          }
+        },
+        "required": [
+          "outcomeId",
+          "odds"
+        ]
+      },
+      "PlaceBetRequest": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "example": "demo-player"
+          },
+          "outcomeId": {
+            "type": "string",
+            "example": "lol-finale-a"
+          },
+          "stake": {
+            "type": "number",
+            "example": 20,
+            "minimum": 0,
+            "description": "Mise (strictement positive)"
+          }
+        },
+        "required": [
+          "userId",
+          "outcomeId",
+          "stake"
+        ]
+      },
+      "PlaceBetResponse": {
+        "type": "object",
+        "properties": {
+          "betId": {
+            "type": "string",
+            "example": "3f9c0b2e-..."
+          },
+          "lockedOdds": {
+            "type": "number",
+            "example": 2,
+            "description": "Cote figée à la pose"
+          },
+          "potentialGain": {
+            "type": "number",
+            "example": 40
+          },
+          "pricingProvisional": {
+            "type": "boolean",
+            "example": true,
+            "description": "Cote d'ouverture (read-model froid)"
+          }
+        },
+        "required": [
+          "betId",
+          "lockedOdds",
+          "potentialGain"
+        ]
+      },
+      "BetViewDto": {
+        "type": "object",
+        "properties": {
+          "betId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string",
+            "example": "demo-player"
+          },
+          "outcomeId": {
+            "type": "string",
+            "example": "lol-finale-a"
+          },
+          "stake": {
+            "type": "number",
+            "example": 20
+          },
+          "lockedOdds": {
+            "type": "number",
+            "example": 2
+          },
+          "potentialGain": {
+            "type": "number",
+            "example": 40
+          },
+          "status": {
+            "type": "string",
+            "example": "PENDING",
+            "enum": [
+              "PENDING",
+              "WON",
+              "LOST",
+              "VOID",
+              "COMPENSATING",
+              "REFUNDED"
+            ]
+          }
+        },
+        "required": [
+          "betId",
+          "userId",
+          "outcomeId",
+          "stake",
+          "lockedOdds",
+          "potentialGain",
+          "status"
+        ]
+      },
+      "BetEventDto": {
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "number",
+            "example": 1
+          },
+          "type": {
+            "type": "string",
+            "example": "BetPlaced",
+            "enum": [
+              "BetPlaced",
+              "BetWon",
+              "BetLost",
+              "BetVoided"
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "example": "2026-06-16T10:00:00.000Z"
+          }
+        },
+        "required": [
+          "seq",
+          "type",
+          "occurredAt"
+        ]
+      },
+      "SettleMarketRequest": {
+        "type": "object",
+        "properties": {
+          "outcomes": {
+            "example": [
+              "lol-finale-a",
+              "lol-finale-b",
+              "lol-finale-draw"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "winningOutcomeId": {
+            "type": "string",
+            "nullable": true,
+            "example": "lol-finale-a"
+          },
+          "voided": {
+            "type": "boolean",
+            "example": false,
+            "description": "true = annulation (remboursement)"
+          },
+          "strategyKey": {
+            "type": "string",
+            "example": "WINNING_OUTCOME"
+          }
+        },
+        "required": [
+          "outcomes"
+        ]
+      },
+      "SettleMarketResultDto": {
+        "type": "object",
+        "properties": {
+          "settled": {
+            "type": "number",
+            "example": 2
+          },
+          "failed": {
+            "type": "number",
+            "example": 0
+          },
+          "won": {
+            "type": "number",
+            "example": 1
+          },
+          "lost": {
+            "type": "number",
+            "example": 1
+          },
+          "voided": {
+            "type": "number",
+            "example": 0
+          },
+          "failedBetIds": {
+            "example": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "settled",
+          "failed",
+          "won",
+          "lost",
+          "voided",
+          "failedBetIds"
+        ]
+      },
+      "OutcomeDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "lol-finale-a"
+          },
+          "label": {
+            "type": "string",
+            "example": "Victoire Team A"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ]
+      },
+      "MarketDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "mkt-lol-finale"
+          },
+          "name": {
+            "type": "string",
+            "example": "BetNext Major — Team A vs Team B"
+          },
+          "game": {
+            "type": "string",
+            "example": "LoL"
+          },
+          "outcomes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OutcomeDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "game",
+          "outcomes"
+        ]
+      },
+      "CreateMarketRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "CS Major — NaVi vs Vitality"
+          },
+          "game": {
+            "type": "string",
+            "example": "CS2"
+          },
+          "outcomes": {
+            "example": [
+              "Victoire NaVi",
+              "Victoire Vitality"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "game",
+          "outcomes"
+        ]
+      },
+      "DailyCapDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "example": "demo-player"
+          },
+          "dailyCap": {
+            "type": "number",
+            "nullable": true,
+            "example": 50,
+            "description": "null si aucun plafond défini"
+          }
+        },
+        "required": [
+          "userId",
+          "dailyCap"
+        ]
+      },
+      "SetDailyCapRequest": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "example": "demo-player"
+          },
+          "cap": {
+            "type": "number",
+            "example": 50,
+            "minimum": 0,
+            "description": "Plafond quotidien (> 0)"
+          }
+        },
+        "required": [
+          "userId",
+          "cap"
+        ]
+      }
+    }
+  }
+}

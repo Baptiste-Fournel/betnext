@@ -46,3 +46,17 @@ jobs:
         run: node scripts/readmodel-redis.cjs
         env:
           REDIS_URL: redis://localhost:6379
+
+  web-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+      - name: Front — install + client typé régénéré depuis le contrat + typecheck (garde incluse)
+        working-directory: web
+        run: |
+          npm install
+          npm run generate:api
+          npm run typecheck
