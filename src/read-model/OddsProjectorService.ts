@@ -7,20 +7,42 @@ import {
 } from '@nestjs/common';
 import { Job, Worker } from 'bullmq';
 import { ODDS_READ_MODEL, OddsReadModel } from './OddsReadModel';
+import { OddsLiveEvent, OddsStream } from './OddsStream';
 import { ODDS_QUEUE } from '../messaging/topics';
 
+interface OddsUpdatedPayload {
+  type: string;
+  occurredAt?: string;
+  updates: OddsLiveEvent[];
+}
+
 /**
- * Projection câblée au BOOT : consomme OddsUpdated (file odds, publiée par Pricing) et met à jour
- * le read-model. Maillon qui rend la cote async VISIBLE en lecture. Worker en `concurrency: 1`
- * (ordre FIFO par file) + garde monotone `occurredAt` côté read-model → pas de cote durablement
- * fausse sous réordonnancement/retry. Actif si REDIS_URL ; sinon inerte (tests projettent en direct).
+ * Projection câblée au BOOT : consomme OddsUpdated (file odds, publiée par Pricing), met à jour le
+ * read-model (garde monotone, FIFO) PUIS pousse chaque cote sur le flux live (SSE — incrément 3).
+ * Le flux SSE est donc alimenté par le VRAI event OddsUpdated, pas par du polling. Actif si
+ * REDIS_URL ; sinon inerte (les tests appellent `project()` directement).
  */
 @Injectable()
 export class OddsProjectorService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(OddsProjectorService.name);
   private worker?: Worker;
 
-  constructor(@Inject(ODDS_READ_MODEL) private readonly readModel: OddsReadModel) {}
+  constructor(
+    @Inject(ODDS_READ_MODEL) private readonly readModel: OddsReadModel,
+    private readonly stream: OddsStream,
+  ) {}
+
+  /** Cœur testable : OddsUpdated → read-model + flux live (mêmes données, une seule source). */
+  async project(payload: OddsUpdatedPayload): Promise<void> {
+    if (payload.type !== 'OddsUpdated') {
+      return;
+    }
+    const parsed = payload.occurredAt ? Date.parse(payload.occurredAt) : Date.now();
+    await this.readModel.put(payload.updates, Number.isNaN(parsed) ? Date.now() : parsed);
+    for (const update of payload.updates) {
+      this.stream.publish({ outcomeId: update.outcomeId, odds: update.odds });
+    }
+  }
 
   onApplicationBootstrap(): void {
     const redisUrl = process.env.REDIS_URL;
@@ -33,20 +55,13 @@ export class OddsProjectorService implements OnApplicationBootstrap, OnModuleDes
     this.worker = new Worker(
       ODDS_QUEUE,
       async (job: Job) => {
-        const payload = JSON.parse(job.data.payload as string) as {
-          type: string;
-          occurredAt?: string;
-          updates: { outcomeId: string; odds: number }[];
-        };
-        if (payload.type !== 'OddsUpdated') {
-          return;
-        }
-        const parsed = payload.occurredAt ? Date.parse(payload.occurredAt) : Date.now();
-        await this.readModel.put(payload.updates, Number.isNaN(parsed) ? Date.now() : parsed);
+        await this.project(JSON.parse(job.data.payload as string) as OddsUpdatedPayload);
       },
       { connection, concurrency: 1 },
     );
-    this.logger.log(`Projecteur cotes actif (consomme ${ODDS_QUEUE} → read-model, FIFO).`);
+    this.logger.log(
+      `Projecteur cotes actif (consomme ${ODDS_QUEUE} → read-model + flux SSE, FIFO).`,
+    );
   }
 
   async onModuleDestroy(): Promise<void> {
