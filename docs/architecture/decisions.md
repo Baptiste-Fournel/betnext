@@ -255,14 +255,21 @@ Plafond quotidien configurable **par joueur**, calculé **net des annulations/re
 
 ---
 
-### ADR-014 — Coutures inter-contextes réalisées : ports `MarketCreationPort` / `MarketSettlementPort` + cote d'ouverture **source unique** (BET-21/28/29)
+### ADR-014 — Coutures inter-contextes réalisées : ports `MarketCreationPort` / `MarketSettlementPort` + cote d'ouverture **source unique** (BET-28/30)
+
+> **Note recentrage (BET-30).** Les **flux UI/endpoints** « featured par ID » et « sync manuel »
+> (BET-21/29) ont été **retirés** (redondants avec l'ajout manuel + le feed auto). Le **moteur de
+> règlement** reste en place : port **`MarketSettlementPort`** + adapter `CommandBusMarketSettlement`
+> **conservés et câblés** (avec `SyncMatchResult`), dormants, prêts pour le futur driver
+> « résultats esports auto ». La résolution actuelle se fait **manuellement** (BET-12,
+> `POST /markets/settle`, même moteur exactly-once).
 
 **Décision.** Les frontières conçues (ADR-001/009) sont **matérialisées par des ports du
 Shared Kernel**, pas par des imports inter-contextes. Au-delà du chemin argent
 (`WalletDebitPort`/`WalletCreditPort`/`StakeGuardPort`), deux ports portent l'intégration des
-jeux : **`MarketCreationPort`** (Game Integration crée un marché N-issues → implémenté par
-`CatalogMarketCreation` côté Catalog) et **`MarketSettlementPort`** (Game Integration déclenche
-le règlement → implémenté par `CommandBusMarketSettlement` côté Betting). Game Integration ne
+jeux : **`MarketCreationPort`** (Game Integration crée un marché N-issues → `CatalogMarketCreation`
+côté Catalog) et **`MarketSettlementPort`** (déclenchement du règlement → `CommandBusMarketSettlement`
+côté Betting, exactly-once). Game Integration ne
 connaît **ni Catalog ni Betting** : il dépend d'interfaces du Shared Kernel (vérifié
 dependency-cruiser, 0 violation). En complément, la **cote d'ouverture** (servie tant qu'un
 marché n'a aucun volume) est une **source unique** dans `shared-kernel`
@@ -286,8 +293,9 @@ afficher ≠ figer → faille money-safety ; rejeté au profit d'une source uniq
 **Ancrage.** `src/shared-kernel/ports/{MarketCreationPort,MarketSettlementPort}.ts`,
 `src/contexts/catalog/infrastructure/CatalogMarketCreation.ts`,
 `src/contexts/betting/infrastructure/CommandBusMarketSettlement.ts`,
-`src/shared-kernel/domain/OpeningOdds.ts`. Résilience Riot (ACL + circuit breaker) :
-`src/contexts/game-integration/infrastructure/riot/`.
+`src/contexts/game-integration/application/SyncMatchResult.ts`,
+`src/shared-kernel/domain/OpeningOdds.ts`. ACL + résilience : feed esports
+`src/contexts/game-integration/infrastructure/esports/` ; résultat `.../infrastructure/riot/`.
 
 ---
 
@@ -319,6 +327,62 @@ du sujet authentifié.
 `src/contexts/identity/`, `src/shared-kernel/ports/TokenVerifierPort.ts`,
 contrôleurs `@Roles('MANAGER')` (Settlement/Catalog/Wallet/Reconciliation/GameIntegration),
 `web/apps/{player,admin}` + `web/README.md`.
+
+---
+
+### ADR-016 — Feed des matchs LoL pro à venir : source externe **non-officielle derrière un ACL + repli fixtures** (BET-30)
+
+**Décision.** Le feed des **gros matchs LoL pro à venir** (LEC/LCK/LPL/MSI…) est ingéré
+derrière un **nouveau port** `EsportsScheduleProvider` (couche application) qui ne renvoie que
+notre **type domaine** `ScheduledMatch` (`externalId, game, league, teamA, teamB, startTime`).
+Trois adapters : `LolEsportsScheduleProvider` (API **non-officielle** LoL Esports —
+`getSchedule`, **base URL + clé en ENV**, jamais en dur ni loggée), `FixtureEsportsScheduleProvider`
+(vraies équipes/ligues, dates proches) et deux décorateurs — `ResilientScheduleProvider`
+(timeout + retry) et `FallbackEsportsScheduleProvider` (bascule **automatique** sur les fixtures
+si la source live échoue, et **signale** le mode via `source: 'live' | 'fixtures'`). L'ingestion
+(`IngestUpcomingMatches`, endpoint `POST /game-integration/esports/ingest` *MANAGER*) transforme
+chaque match à venir en marché bettable via la brique `IngestMatchMarket` → **`MarketCreationPort`**
+(+ lien match↔marché, clé = `externalId`). Elle est **idempotente** (un `externalId` déjà lié est
+ignoré → un re-pull ne duplique aucun marché) et **ne casse jamais l'app** (feed down → 0 nouveau
+marché, l'existant intact). Les **cotes** restent celles de **notre pricing** (ouverture BET-28 +
+volume) — **aucune cote externe**. Le lien porte le **mapping côté→issue**, ce qui rend les marchés
+du feed **réglables par résultat**. La **résolution** se fait pour l'instant **manuellement** par le
+gestionnaire (« Régler un marché » = BET-12, `POST /markets/settle`, exactly-once) ; le **moteur de
+règlement-par-résultat** (`SyncMatchResult` + `MarketSettlementPort`) est **conservé et câblé**
+(dormant), prêt pour le **futur driver « résultats esports auto »** qui réglera les paris du feed
+automatiquement. Le **money-path n'est pas touché**.
+
+> **Recentrage (BET-30).** L'app ne garde que **deux sources de marchés** : (1) ajout **manuel**
+> par le gestionnaire (Catalog/`CreateMarket`) et (2) **feed auto** (ce feed). Seuls les **flux
+> UI/endpoints** « featured par ID » et « sync manuel » (BET-21/29) ont été **supprimés** comme
+> redondants ; le **moteur de règlement** (`SyncMatchResult` + `MarketSettlementPort` + ACL résultat)
+> est **conservé** pour la prochaine feature « résultats auto ». La brique de création de marché du
+> feed s'appelle désormais `IngestMatchMarket` (mécanisme d'ingestion, plus un « featured »
+> utilisateur).
+
+**Alternatives écartées.** (a) *Laisser fuiter le JSON LoL Esports dans le domaine* :
+couple le métier à un format externe instable → rejeté (ACL strict, test anti-fuite).
+(b) *Consommer les cotes de la source* : contredit le défi 1 (cote = notre pricing, figée au
+pari) → rejeté. (c) *Câbler un settlement esports-results automatique* : sur-build risqué et non
+démontrable (matchs non finis en soutenance) → rejeté ; la résolution reste **manuelle** (BET-12).
+(d) *Clé publique en dur dans le code* : même publique, elle reste en **config/ENV** (testé :
+absente de l'URL).
+
+**Compromis.**
+- **Gain** : feed réel **démo-able quoi qu'il arrive** (live ou fixtures) ; source **swappable**
+  sans toucher le domaine ; ingestion sûre (idempotente, non bloquante) ; money-path intact ;
+  surface réduite (deux sources claires, une seule voie de résolution).
+- **Perte** : idempotence garantie **au sein d'une instance** (lien match↔marché en mémoire) — un
+  redémarrage + re-pull peut recréer des marchés en BDD ; le **driver de règlement auto** du feed =
+  **ticket suivant** (le moteur est prêt, le déclencheur reste à écrire).
+- **Condition** : tout format externe reste **confiné à l'adapter** ; base URL + clé en ENV ;
+  aucune cote externe ; la résolution passe **toujours** par le moteur exactly-once
+  (`MarketSettlementPort` / BET-12).
+
+**Ancrage.** `src/contexts/game-integration/application/ports/EsportsScheduleProvider.ts`,
+`.../application/IngestUpcomingMatches.ts`,
+`.../infrastructure/esports/{LolEsportsScheduleProvider,FixtureEsportsScheduleProvider,ResilientScheduleProvider,FallbackEsportsScheduleProvider}.ts`,
+endpoint `POST /game-integration/esports/ingest`, ENV `ESPORTS_API_BASE_URL` / `ESPORTS_API_KEY`.
 
 ---
 

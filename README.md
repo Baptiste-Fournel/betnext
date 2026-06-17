@@ -28,8 +28,9 @@ d'architecte : chaque choix est justifié et chaque compromis assumé.
   (contrainte 3) et de la cote **asynchrone** (BET-8).
 - **Authentification + RBAC** (BET-20) : login JWT, rôles `PLAYER`/`MANAGER`, scoping
   anti-IDOR (un joueur ne lit que ses propres paris). L'autorité est 100 % serveur.
-- **Game Integration / Riot** (BET-21, BET-29) : ACL fournisseur + résilience (circuit
-  breaker, timeout/retry) ; matchs Riot mis en avant et règlement live.
+- **Game Integration** (BET-30) : **feed des matchs LoL pro à venir** (API LoL Esports derrière
+  un **ACL** `EsportsScheduleProvider` + repli **fixtures**, timeout/retry) ingérés en marchés
+  bettables via `MarketCreationPort`. Cotes = notre pricing. Résolution **manuelle** (BET-12).
 - **Sécurité de l'argent** : chemin de pari atomique (une transaction), idempotence des
   consommateurs, ledger signé + réconciliation, compensations sans double-crédit
   (voir ADR-003/004/008/013).
@@ -48,7 +49,7 @@ src/
     catalog/          SportEvent N-issues générique, création de marché
     betting/          domain (Bet, états) | application (PlaceBet, settlement, stats + ports) | infra
     pricing/          domain (OddsCalculator pari-mutuel) | pricing.module (extractible)
-    game-integration/ ACL Riot + résilience, matchs featured, settlement live (BET-21/29)
+    game-integration/ feed matchs LoL pro à venir : ACL EsportsScheduleProvider + repli fixtures + ingestion (BET-30)
   read-model/                  read-model Redis des cotes + SSE
   messaging/                   Transactional Outbox + BullMQ + idempotence consommateur
   persistence/                 TypeORM / migrations (Postgres)
@@ -140,8 +141,8 @@ curl -X POST http://localhost:3000/bets \
 | `GET /bets/stats` | PLAYER (scopé) | Betting (read-model, BET-23) |
 | `GET`/`PUT /responsible-gaming/daily-cap` | token | Compliance |
 | `POST /wallet/open` *(M)*, `GET /admin/reconciliation` *(M)* | MANAGER | Wallet |
-| `GET /game-integration/featured` | public | Game Integration (BET-29) |
-| `POST /game-integration/featured`, `POST /game-integration/matches`, `.../matches/:id/sync` *(toutes M)* | MANAGER | Game Integration (BET-21/29) |
+| `GET /game-integration/upcoming` | public | Game Integration (BET-30) |
+| `POST /game-integration/esports/ingest` *(M)* | MANAGER | Game Integration (BET-30) |
 
 > La cote affichée et la cote figée au pari proviennent désormais d'une **source unique** :
 > le read-model Redis (alimenté par Pricing), et la **cote d'ouverture** partagée
@@ -474,23 +475,38 @@ l'identité courante. Deux rôles : **`PLAYER`** et **`MANAGER`**.
 > L'autorité reste **100 % serveur** : le scoping par rôle côté front (`<AppShell>`) n'est
 > qu'une UX ; un client forgé n'obtient que des 401/403 du back.
 
-## Game Integration — ACL Riot, résilience, matchs featured (BET-21, BET-29)
+## Game Integration — feed des matchs LoL pro à venir (BET-30)
 
-Le contexte **Game Integration** intègre un fournisseur réel (Riot) derrière un **ACL** et
-des **ports du Shared Kernel** — il ne connaît ni Catalog ni Betting en direct.
+Deux sources de marchés alimentent la plateforme : (1) l'**ajout manuel** par le gestionnaire
+(« Ouvrir un marché » → Catalog/`CreateMarket`) et (2) le **feed auto** des matchs LoL pro à
+venir (ci-dessous). Le contexte **Game Integration** ne connaît ni Catalog ni Betting en
+direct : il passe par les **ports du Shared Kernel** (`MarketCreationPort`, `MarketSettlementPort`).
+La **résolution** d'un marché se fait pour l'instant **manuellement** par le gestionnaire
+(« Régler un marché » = BET-12). Le **moteur de règlement-par-résultat exactly-once**
+(`SyncMatchResult` + ACL résultat + `MarketSettlementPort`) est **conservé et câblé**, prêt pour
+le futur **driver « résultats esports auto »** (ticket suivant) — seuls les flux *featured par ID*
+et *sync manuel* de BET-21/29 (UI/endpoints) ont été retirés.
 
-- **ACL + résilience** : `RiotGameProvider` traduit le modèle externe ; `ResilientRiotClient`
-  ajoute **timeout + retry** et un **circuit breaker** (`failureThreshold: 5`,
-  `resetTimeoutMs: 30s`). Sans `RIOT_API_KEY`, un `StubRiotClient` fait tourner la démo/CI
-  **sans réseau ni clé**.
-- **Matchs featured en un geste** (BET-29) : `POST /game-integration/featured` *(MANAGER)*
-  crée le marché N-issues via **`MarketCreationPort`** (→ Catalog) et enregistre le lien
-  match→marché. `GET /game-integration/featured` (public) liste les matchs mis en avant pour
-  le joueur.
-- **Règlement live** : `POST /game-integration/matches/:id/sync` *(MANAGER)* lit le résultat
-  Riot et déclenche le règlement via **`MarketSettlementPort`** (→ Betting). L'argent ne
-  traverse jamais la frontière : le crédit reste **dans la transaction de Betting**
-  (money-safety préservée).
+- **Feed matchs pro à venir** : `POST /game-integration/esports/ingest` *(MANAGER)* ingère les
+  **gros matchs LoL pro à venir** (LEC/LCK/LPL/MSI…) en marchés bettables. Source derrière un
+  **ACL** : port `EsportsScheduleProvider` + adapter API **non-officielle** LoL Esports (base
+  URL + clé en **ENV**, jamais en dur ni loggée) + adapter **fixtures** (démo/mode dégradé). Le
+  format externe ne fuit pas dans le domaine (`ScheduledMatch` neutre).
+- **Résilience + repli** : `ResilientScheduleProvider` (timeout + retry) ; `FallbackEsportsScheduleProvider`
+  bascule **automatiquement** sur les fixtures si la source live échoue et **signale** le mode
+  via `source: 'live' | 'fixtures'`. L'app ne casse jamais : feed down → 0 nouveau marché,
+  l'existant intact.
+- **Ingestion idempotente** : `IngestUpcomingMatches` réutilise la brique `IngestMatchMarket`
+  (→ `MarketCreationPort` + lien match↔marché, clé = id externe). Un re-pull ne duplique pas
+  les marchés. **Cotes = notre pricing** (cote d'ouverture BET-28 + volume ; aucune cote
+  externe). `GET /game-integration/upcoming` (public) sert au joueur le **badge ligue + kickoff**.
+  Le lien porte le **mapping côté→issue**, prêt à être réglé par résultat.
+- **Moteur de règlement conservé** : `SyncMatchResult` (résultat → règlement exactly-once via
+  `MarketSettlementPort`, ACL résultat derrière `GameProvider`) reste **câblé mais dormant** — pas
+  d'endpoint manuel. Le futur driver « résultats esports auto » le déclenchera pour régler les
+  paris du feed automatiquement.
+
+Voir **ADR-016**.
 
 ## Cotes d'ouverture — source unique (BET-28)
 
@@ -541,8 +557,8 @@ POC pédagogique. Les **7 contextes** sont implémentés (Identity/auth, Wallet,
 Catalog, Betting, Pricing, Game Integration) sur adapters **Postgres/Redis/BullMQ réels** ;
 le cœur (pari-mutuel, cote figée, idempotence, frontières, money-safety) est testé sur
 infra réelle. Restent **conçus, non implémentés** (calibrage POC, voir ADR) : Stripe/paiement
-externe (Saga stretch), `BetTypeStrategy` au placement et payout `PARTIAL`, ingestion Riot
-multi-marchés simultanés (Pricing tient des totaux par issue, isolation par `eventId` flaggée).
+externe (Saga stretch), `BetTypeStrategy` au placement et payout `PARTIAL`, settlement
+**automatique** du feed esports (la résolution reste manuelle via BET-12).
 
 **BET-11 livré** : `placeBet` exposé en HTTP via une commande CQRS (`POST /bets`) + `GET /health` ;
 l'app est lançable (`npm start`) et couverte par un test e2e (santé + 201/400/422).
@@ -604,9 +620,10 @@ correction, idempotence, multi-wallets) + non-régression `test:atomicity:pg` (d
 `RolesGuard`) + **scoping anti-IDOR** (`userId` issu du token ; paris non possédés → 404) ;
 vérification de token via port partagé `TokenVerifierPort`.
 
-**BET-21 livré** : **Game Integration / Riot** — `GameProvider` + **ACL** + résilience
-(circuit breaker, timeout/retry, stub sans clé) + settlement automatique via
-`MarketSettlementPort`.
+**BET-21** : **Game Integration / Riot** — le **moteur de règlement-par-résultat** (`SyncMatchResult`
++ ACL résultat derrière `GameProvider` + `MarketSettlementPort`, exactly-once) est **conservé et
+câblé** (dormant), prêt pour le futur driver « résultats esports auto ». Seuls l'**endpoint/UI de
+sync manuel** a été retiré au recentrage BET-30.
 
 **BET-22 livré** : front scindé en **deux apps Next.js** (joueur :3001 / admin :3002) +
 packages partagés (`@betnext/ui`, `@betnext/api-contract`) ; ESLint des apps autonome en CI.
@@ -623,6 +640,14 @@ gestionnaire).
 **BET-28 livré** : **cotes d'ouverture** servies depuis une **source unique** partagée
 (`shared-kernel`, `2.0`) — `afficher == figer` ; champ de contrat `pricingProvisional`.
 
-**BET-29 livré** : **matchs Riot featured one-step** (`POST /game-integration/featured` →
-marché via `MarketCreationPort`) + **liste publique** (`GET /game-integration/featured`) +
-**settlement live** (`.../matches/:id/sync`).
+**BET-29** : **flux « featured par ID » + UI de sync manuel** — **retiré au recentrage BET-30**
+(redondant avec l'ajout manuel + le feed auto). La brique de création de marché est conservée,
+renommée `IngestMatchMarket` (mécanisme d'ingestion, plus un « featured » utilisateur) ; le moteur
+de règlement, lui, est conservé (cf. BET-21 ci-dessus).
+
+**BET-30 livré** : **feed des matchs LoL pro à venir** (API LoL Esports non-officielle derrière
+un **ACL** `EsportsScheduleProvider` + adapter **fixtures** de repli) ingérés en marchés bettables
+(`POST /game-integration/esports/ingest` *MANAGER*, brique `IngestMatchMarket` → `MarketCreationPort`)
+— **idempotent**, **non bloquant** (repli auto + `source` live/fixtures), **cotes = notre pricing** ;
+UI joueur `GET /game-integration/upcoming` avec **badge ligue + kickoff**. Résolution **manuelle**
+des marchés (BET-12), money-path inchangé. Voir **ADR-016**.

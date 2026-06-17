@@ -244,23 +244,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/game-integration/featured": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["FeaturedMatchesController_list"];
-        put?: never;
-        post: operations["GameIntegrationController_feature"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/game-integration/matches": {
+    "/game-integration/esports/ingest": {
         parameters: {
             query?: never;
             header?: never;
@@ -269,23 +253,23 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["GameIntegrationController_link"];
+        post: operations["EsportsIngestionController_ingest"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/game-integration/matches/{matchId}/sync": {
+    "/game-integration/upcoming": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["UpcomingMatchesController_list"];
         put?: never;
-        post: operations["GameIntegrationController_sync"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -580,111 +564,57 @@ export interface components {
             /** @example PLAYER */
             role: string;
         };
-        FeaturedOutcomeInputDto: {
-            /** @example Victoire Blue side */
-            label: string;
+        IngestSummaryDto: {
             /**
-             * @example HOME
+             * @description source du feed
+             * @example live
              * @enum {string}
              */
-            side: "HOME" | "AWAY" | "DRAW";
-        };
-        FeatureRiotMatchRequest: {
-            /** @example Riot Featured — Blue vs Red */
-            name: string;
-            /** @example LoL */
-            game: string;
-            /** @example EUW1_7437325115 */
-            matchId: string;
+            source: "live" | "fixtures";
             /**
-             * @description région (métadonnée ; routing europe)
-             * @example EUW
+             * @description matchs à venir reçus de la source
+             * @example 8
              */
-            region?: string;
-            outcomes: components["schemas"]["FeaturedOutcomeInputDto"][];
-        };
-        FeaturedSideMappingDto: {
-            /** @example mkt-featured-euw1-7437325115-1 */
-            HOME?: string;
-            /** @example mkt-featured-euw1-7437325115-2 */
-            AWAY?: string;
-            /** @example mkt-featured-euw1-7437325115-3 */
-            DRAW?: string;
-        };
-        FeaturedMatchDto: {
-            /** @example EUW1_7437325115 */
-            matchId: string;
-            /** @example mkt-featured-euw1-7437325115 */
-            marketId: string;
-            /** @example EUW */
-            region: string | null;
-            outcomes: string[];
-            mapping: components["schemas"]["FeaturedSideMappingDto"];
-        };
-        OutcomeMappingDto: {
+            total: number;
             /**
-             * @description issue gagnante si HOME gagne
-             * @example mkt-demo-lol-1
+             * @description nouveaux marchés créés
+             * @example 6
              */
-            HOME?: string;
+            ingested: number;
             /**
-             * @description issue gagnante si AWAY gagne
-             * @example mkt-demo-lol-2
+             * @description déjà ingérés (idempotent) — non dupliqués
+             * @example 2
              */
-            AWAY?: string;
+            skipped: number;
             /**
-             * @description issue si match nul (sinon annulé)
-             * @example mkt-demo-lol-3
+             * @description matchs ignorés pour données invalides
+             * @example 0
              */
-            DRAW?: string;
-        };
-        RegisterMatchLinkRequest: {
-            /** @example EUW1_1234567890 */
-            matchId: string;
-            /**
-             * @example [
-             *       "mkt-demo-lol-1",
-             *       "mkt-demo-lol-2",
-             *       "mkt-demo-lol-3"
-             *     ]
-             */
-            outcomes: string[];
-            mapping: components["schemas"]["OutcomeMappingDto"];
-        };
-        MatchLinkDto: {
-            /** @example EUW1_1234567890 */
-            matchId: string;
-            outcomes: string[];
-            mapping: components["schemas"]["OutcomeMappingDto"];
-        };
-        SettlementSummaryDto: {
-            /** @example 1 */
-            settled: number;
-            /** @example 1 */
-            won: number;
-            /** @example 0 */
-            lost: number;
-            /** @example 0 */
-            voided: number;
-            /** @example 0 */
             failed: number;
+            /** @description ids des marchés créés */
+            marketIds: string[];
         };
-        SyncResultDto: {
-            /** @example EUW1_1234567890 */
+        UpcomingMatchDto: {
+            /**
+             * @description id externe du match (clé du lien)
+             * @example 115570934355614497
+             */
             matchId: string;
             /**
-             * @example SETTLED
-             * @enum {string}
+             * @description marché bettable créé pour ce match
+             * @example mkt-1bb3ce76
              */
-            status: "PENDING" | "SETTLED";
+            marketId: string;
             /**
-             * @example WON_OUTCOME
-             * @enum {string}
+             * @description ligue du match à venir (badge)
+             * @example MSI
              */
-            resolution?: "WON_OUTCOME" | "VOIDED";
-            /** @example mkt-demo-lol-1 */
-            winningOutcomeId?: string;
-            summary?: components["schemas"]["SettlementSummaryDto"];
+            league: string | null;
+            /**
+             * @description kickoff ISO 8601 du match à venir
+             * @example 2026-06-28T03:00:00Z
+             */
+            startTime: string | null;
         };
     };
     responses: never;
@@ -1281,7 +1211,7 @@ export interface operations {
             };
         };
     };
-    FeaturedMatchesController_list: {
+    EsportsIngestionController_ingest: {
         parameters: {
             query?: never;
             header?: never;
@@ -1290,45 +1220,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Matchs Riot mis en avant (matchId, région, marketId, mapping) — PUBLIC */
+            /** @description Ingère les matchs LoL pro à venir (source live ou fixtures en mode dégradé) en marchés bettables. Idempotent : un re-pull ne duplique pas les marchés. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FeaturedMatchDto"][];
+                    "application/json": components["schemas"]["IngestSummaryDto"];
                 };
-            };
-        };
-    };
-    GameIntegrationController_feature: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FeatureRiotMatchRequest"];
-            };
-        };
-        responses: {
-            /** @description Match Riot mis en avant : marché créé + lien match↔marché (one-step) */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FeaturedMatchDto"];
-                };
-            };
-            /** @description Corps invalide (name/game/matchId/outcomes) */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Token Bearer requis/invalide */
             401: {
@@ -1346,84 +1245,23 @@ export interface operations {
             };
         };
     };
-    GameIntegrationController_link: {
+    UpcomingMatchesController_list: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegisterMatchLinkRequest"];
-            };
-        };
-        responses: {
-            /** @description Lien match↔marché enregistré */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatchLinkDto"];
-                };
-            };
-            /** @description Corps invalide (matchId/outcomes/mapping) */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Token Bearer requis/invalide */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Réservé au rôle MANAGER */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    GameIntegrationController_sync: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                matchId: string;
-            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Résultat synchronisé (réglé si match fini) */
+            /** @description Matchs pro à venir ingérés (matchId, marketId, ligue, kickoff) — PUBLIC */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SyncResultDto"];
+                    "application/json": components["schemas"]["UpcomingMatchDto"][];
                 };
-            };
-            /** @description Token Bearer requis/invalide */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Réservé au rôle MANAGER */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };

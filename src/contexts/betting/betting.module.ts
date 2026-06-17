@@ -117,6 +117,8 @@ export const BETTING_TOKENS = {
       inject: [BET_REPOSITORY, WALLET_CREDIT_PORT, SettlementStrategyFactory, UNIT_OF_WORK],
     },
     {
+      // Couture inter-contextes : permet à un déclencheur de règlement (ex. futur driver
+      // « résultats esports auto ») de régler un marché via le bus de commandes, exactly-once.
       provide: MARKET_SETTLEMENT_PORT,
       useFactory: (commandBus: CommandBus): MarketSettlementPort =>
         new CommandBusMarketSettlement(commandBus),

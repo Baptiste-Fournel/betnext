@@ -23,9 +23,22 @@ import { BetSlip, type Selection } from '@/components/bet-slip';
 import { CapPanel } from '@/components/cap-panel';
 
 type Market = components['schemas']['MarketDto'];
+type UpcomingMatch = components['schemas']['UpcomingMatchDto'];
 type OddsLiveEvent = components['schemas']['OddsLiveEventDto'];
 type LiveState = 'connecting' | 'live' | 'reconnecting';
 type OddsState = { value: number; opening: boolean };
+
+function formatKickoff(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return new Intl.DateTimeFormat('fr-FR', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
 
 function parseOddsEvent(raw: string): OddsLiveEvent | null {
   try {
@@ -36,8 +49,7 @@ function parseOddsEvent(raw: string): OddsLiveEvent | null {
         return { outcomeId: value.outcomeId, odds: value.odds };
       }
     }
-  } catch {
-  }
+  } catch {}
   return null;
 }
 
@@ -52,7 +64,7 @@ export function PlayerView(): React.JSX.Element {
   const userId = user?.userId ?? '';
   const [markets, setMarkets] = useState<Market[] | null>(null);
   const [marketsError, setMarketsError] = useState(false);
-  const [featuredMarketIds, setFeaturedMarketIds] = useState<Set<string>>(new Set());
+  const [upcomingByMarket, setUpcomingByMarket] = useState<Map<string, UpcomingMatch>>(new Map());
   const [odds, setOdds] = useState<Record<string, OddsState | null>>({});
   const [live, setLive] = useState<LiveState>('connecting');
   const [selected, setSelected] = useState<Selection | null>(null);
@@ -69,10 +81,10 @@ export function PlayerView(): React.JSX.Element {
       }
       setMarkets(data);
       try {
-        const { data: featured } = await api.GET('/game-integration/featured');
-        if (featured) setFeaturedMarketIds(new Set(featured.map((f) => f.marketId)));
+        const { data: upcoming } = await api.GET('/game-integration/upcoming');
+        if (upcoming) setUpcomingByMarket(new Map(upcoming.map((u) => [u.marketId, u])));
       } catch {
-        // listing featured non bloquant : le badge est purement informatif
+        // listing des matchs à venir non bloquant : badge ligue/kickoff purement informatif
       }
       const entries = await Promise.all(
         data
@@ -142,7 +154,12 @@ export function PlayerView(): React.JSX.Element {
         <section aria-label="Marchés" className="flex flex-col gap-4">
           {marketsError && (
             <Alert variant="error" role="alert" title="Impossible de charger les marchés.">
-              <Button variant="outline" size="sm" className="mt-1" onClick={() => void loadMarkets()}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-1"
+                onClick={() => void loadMarkets()}
+              >
                 Réessayer
               </Button>
             </Alert>
@@ -170,38 +187,44 @@ export function PlayerView(): React.JSX.Element {
             </Card>
           )}
           {!marketsError &&
-            markets?.map((market) => (
-              <Card key={market.id}>
-                <CardHeader>
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <CardTitle className="text-base">{market.name}</CardTitle>
-                      <CardDescription className="mt-1 flex flex-wrap gap-1.5">
-                        <Badge variant="outline">{market.game}</Badge>
-                        {featuredMarketIds.has(market.id) && (
-                          <Badge variant="secondary">Featured · Riot</Badge>
-                        )}
-                      </CardDescription>
+            markets?.map((market) => {
+              const upcoming = upcomingByMarket.get(market.id);
+              return (
+                <Card key={market.id}>
+                  <CardHeader>
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <CardTitle className="text-base">{market.name}</CardTitle>
+                        <CardDescription className="mt-1 flex flex-wrap items-center gap-1.5">
+                          <Badge variant="outline">{market.game}</Badge>
+                          {upcoming?.league && <Badge variant="default">{upcoming.league}</Badge>}
+                          {upcoming?.startTime && (
+                            <span className="text-xs text-muted-foreground">
+                              🗓 {formatKickoff(upcoming.startTime)}
+                            </span>
+                          )}
+                        </CardDescription>
+                      </div>
+                      <Badge variant="success">Ouvert</Badge>
                     </div>
-                    <Badge variant="success">Ouvert</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-2">
-                    {market.outcomes.map((outcome) => (
-                      <OutcomeOddsButton
-                        key={outcome.id}
-                        outcome={outcome}
-                        odds={odds[outcome.id]?.value}
-                        opening={odds[outcome.id]?.opening ?? false}
-                        selected={selected?.outcome.id === outcome.id}
-                        onSelect={() => setSelected({ market, outcome })}
-                      />
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {market.outcomes.map((outcome) => (
+                        <OutcomeOddsButton
+                          key={outcome.id}
+                          outcome={outcome}
+                          odds={odds[outcome.id]?.value}
+                          opening={odds[outcome.id]?.opening ?? false}
+                          selected={selected?.outcome.id === outcome.id}
+                          onSelect={() => setSelected({ market, outcome })}
+                        />
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
         </section>
 
         <aside className="flex flex-col gap-4 lg:sticky lg:top-24">
@@ -209,7 +232,7 @@ export function PlayerView(): React.JSX.Element {
             key={selected?.outcome.id ?? 'empty'}
             userId={userId}
             selection={selected}
-            liveOdds={selected ? odds[selected.outcome.id]?.value ?? null : null}
+            liveOdds={selected ? (odds[selected.outcome.id]?.value ?? null) : null}
             onPlaced={() => setRefreshKey((k) => k + 1)}
             onClear={() => setSelected(null)}
           />

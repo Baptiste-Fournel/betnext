@@ -3,36 +3,45 @@ import { MarketCreationPort } from '../../../shared-kernel/ports/MarketCreationP
 import { MatchOutcomeSide } from '../domain/MatchReport';
 import { MatchLink, MatchLinkStore } from './ports/MatchLinkStore';
 
-export interface FeaturedOutcomeInput {
+export interface IngestOutcomeInput {
   label: string;
   side: MatchOutcomeSide;
 }
 
-export interface FeatureRiotMatchInput {
+export interface IngestMatchMarketInput {
   name: string;
   game: string;
   matchId: string;
   region?: string;
-  outcomes: FeaturedOutcomeInput[];
+  league?: string;
+  startTime?: string;
+  outcomes: IngestOutcomeInput[];
 }
 
-export interface FeaturedMatch {
+export interface MatchMarket {
   matchId: string;
   marketId: string;
   region: string | null;
+  league: string | null;
+  startTime: string | null;
   outcomes: string[];
   mapping: Partial<Record<MatchOutcomeSide, string>>;
 }
 
 const SIDES: readonly MatchOutcomeSide[] = ['HOME', 'AWAY', 'DRAW'];
 
-export class FeatureRiotMatch {
+// Brique d'ingestion (BET-30) : transforme UN match en marché bettable via le MarketCreationPort
+// (→ Catalog) et enregistre le lien match↔marché (clé = id externe → idempotence côté appelant).
+// Le lien porte le mapping côté→issue, consommé par le moteur de règlement-par-résultat
+// (`SyncMatchResult`, réutilisé par le futur driver « résultats esports auto »). Les cotes
+// restent celles de notre pricing ; cette brique ne fait que créer le marché et le lien.
+export class IngestMatchMarket {
   constructor(
     private readonly markets: MarketCreationPort,
     private readonly links: MatchLinkStore,
   ) {}
 
-  async execute(input: FeatureRiotMatchInput): Promise<FeaturedMatch> {
+  async execute(input: IngestMatchMarketInput): Promise<MatchMarket> {
     const matchId = input.matchId?.trim();
     if (!matchId) {
       throw new DomainError('matchId requis');
@@ -74,6 +83,8 @@ export class FeatureRiotMatch {
     });
     const outcomeIds = market.outcomes.map((o) => o.id);
     const region = input.region?.trim() || null;
+    const league = input.league?.trim() || null;
+    const startTime = input.startTime?.trim() || null;
 
     const link: MatchLink = {
       matchId,
@@ -81,9 +92,19 @@ export class FeatureRiotMatch {
       mapping,
       marketId: market.id,
       ...(region ? { region } : {}),
+      ...(league ? { league } : {}),
+      ...(startTime ? { startTime } : {}),
     };
     await this.links.save(link);
 
-    return { matchId, marketId: market.id, region, outcomes: outcomeIds, mapping };
+    return {
+      matchId,
+      marketId: market.id,
+      region,
+      league,
+      startTime,
+      outcomes: outcomeIds,
+      mapping,
+    };
   }
 }

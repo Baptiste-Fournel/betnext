@@ -43,22 +43,12 @@ async function runSeed(dataSource) {
     'INSERT INTO markets ("id", "name", "game", "outcomes") VALUES ($1, $2, $3, $4::jsonb) ON CONFLICT ("id") DO NOTHING',
     [DEMO_MARKET_ID, 'BetNext Major — Team A vs Team B', 'LoL', JSON.stringify(outcomes)],
   );
-  // Marchés des matchs Riot featured (BET-29). Source de vérité partagée avec le bootstrap
-  // game-integration qui rétablit les liens match↔marché en mémoire. Les ids d'issues
-  // insérés ici DOIVENT correspondre au mapping côté→issue du lien (règlement cohérent).
-  const { FEATURED_FIXTURES } = require('../dist/contexts/game-integration/demo/featured-fixtures.js');
-  for (const fixture of FEATURED_FIXTURES) {
-    const featuredOutcomes = fixture.market.outcomes.map((o) => ({ id: o.id, label: o.label }));
-    await dataSource.query(
-      'INSERT INTO markets ("id", "name", "game", "outcomes") VALUES ($1, $2, $3, $4::jsonb) ON CONFLICT ("id") DO NOTHING',
-      [fixture.market.id, fixture.market.name, fixture.market.game, JSON.stringify(featuredOutcomes)],
-    );
-  }
+  // Les marchés des matchs pro à venir ne sont PAS seedés : ils sont créés à la demande par
+  // l'ingestion du feed LoL Esports (BET-30, POST /game-integration/esports/ingest).
   return {
     accounts: ACCOUNTS.map((a) => a.username),
     opening: DEMO_OPENING,
     marketId: DEMO_MARKET_ID,
-    featured: FEATURED_FIXTURES.map((f) => f.matchId),
   };
 }
 

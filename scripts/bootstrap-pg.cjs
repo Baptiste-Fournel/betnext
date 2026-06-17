@@ -66,10 +66,8 @@ const TABLES = [
   const market = await ds.query('SELECT jsonb_array_length(outcomes) AS n FROM markets WHERE id=$1', [DEMO_MARKET_ID]);
   assert.strictEqual(market.length, 1);
   assert.strictEqual(Number(market[0].n), 3);
-  const { FEATURED_FIXTURES } = require('../dist/contexts/game-integration/demo/featured-fixtures.js');
-  const expectedMarkets = 1 + FEATURED_FIXTURES.length;
-  assert.strictEqual((await ds.query('SELECT count(*)::int AS c FROM markets'))[0].c, expectedMarkets);
-  console.log(`✓ seed reproductible : ${ACCOUNTS.length} comptes hashés + wallets (Σ ledger=solde=100) + ${expectedMarkets} marchés (1 démo 3 issues + ${FEATURED_FIXTURES.length} featured), rejeu sans doublon`);
+  assert.strictEqual((await ds.query('SELECT count(*)::int AS c FROM markets'))[0].c, 1);
+  console.log(`✓ seed reproductible : ${ACCOUNTS.length} comptes hashés + wallets (Σ ledger=solde=100) + 1 marché démo (3 issues), rejeu sans doublon`);
 
   await ds.destroy();
   await pg.stop();

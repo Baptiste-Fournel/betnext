@@ -4,8 +4,7 @@ import { useState } from 'react';
 import { HistoryPanel } from '@betnext/ui';
 import { CreateMarket } from '@/components/create-market';
 import { SettleMarket } from '@/components/settle-market';
-import { FeatureMatch } from '@/components/feature-match';
-import { FeaturedMatches } from '@/components/featured-matches';
+import { IngestEsports } from '@/components/ingest-esports';
 
 export function ManagerView(): React.JSX.Element {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -15,18 +14,15 @@ export function ManagerView(): React.JSX.Element {
       <div>
         <h1 className="text-xl font-semibold">Console gestionnaire</h1>
         <p className="text-sm text-muted-foreground">
-          Ouvrez un marché (N issues) puis réglez-le (gagné / perdu / annulé), ou featurez un match
-          Riot réel réglé en direct.
+          Ouvrez un marché manuellement (N issues) ou ingérez les matchs LoL pro à venir, puis
+          réglez un marché (gagné / perdu / annulé) une fois le résultat connu.
         </p>
       </div>
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <CreateMarket onCreated={bump} />
-        <SettleMarket refreshKey={refreshKey} onSettled={bump} />
+        <IngestEsports onIngested={bump} />
       </div>
-      <div className="grid items-start gap-6 lg:grid-cols-2">
-        <FeatureMatch onFeatured={bump} />
-        <FeaturedMatches refreshKey={refreshKey} onSynced={bump} />
-      </div>
+      <SettleMarket refreshKey={refreshKey} onSettled={bump} />
       <HistoryPanel refreshKey={refreshKey} />
     </section>
   );
