@@ -21,6 +21,7 @@ import {
 import { OutcomeOddsButton } from '@/components/outcome-odds-button';
 import { BetSlip, type Selection } from '@/components/bet-slip';
 import { CapPanel } from '@/components/cap-panel';
+import { WalletPanel } from '@/components/wallet-panel';
 
 type Market = components['schemas']['MarketDto'];
 type UpcomingMatch = components['schemas']['UpcomingMatchDto'];
@@ -236,6 +237,7 @@ export function PlayerView(): React.JSX.Element {
             onPlaced={() => setRefreshKey((k) => k + 1)}
             onClear={() => setSelected(null)}
           />
+          <WalletPanel refreshKey={refreshKey} onDeposited={() => setRefreshKey((k) => k + 1)} />
           <CapPanel />
         </aside>
       </div>

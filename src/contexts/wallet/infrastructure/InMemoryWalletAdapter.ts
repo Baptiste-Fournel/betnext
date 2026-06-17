@@ -3,11 +3,19 @@ import { WalletDebitPort } from '../../../shared-kernel/ports/WalletDebitPort';
 import { WalletCreditPort } from '../../../shared-kernel/ports/WalletCreditPort';
 import { WalletFunding } from '../application/ports/WalletFunding';
 import { WalletLedgerView, WalletLedgerRow } from '../application/ports/WalletLedgerView';
+import { WalletRefundPort } from '../application/ports/WalletRefundPort';
+import { WalletBalanceView } from '../application/ports/WalletBalanceView';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 export class InMemoryWalletAdapter
-  implements WalletDebitPort, WalletCreditPort, WalletFunding, WalletLedgerView
+  implements
+    WalletDebitPort,
+    WalletCreditPort,
+    WalletFunding,
+    WalletLedgerView,
+    WalletRefundPort,
+    WalletBalanceView
 {
   private readonly balances = new Map<string, number>();
   private readonly appliedOps = new Set<string>();
@@ -30,10 +38,10 @@ export class InMemoryWalletAdapter
     if (this.appliedOps.has(opKey)) {
       return;
     }
-    if (amount > this.balanceOf(userId)) {
+    if (amount > this.currentBalance(userId)) {
       throw new DomainError('Insufficient balance');
     }
-    this.balances.set(userId, round2(this.balanceOf(userId) - amount));
+    this.balances.set(userId, round2(this.currentBalance(userId) - amount));
     this.record(opKey, userId, -amount);
   }
 
@@ -44,8 +52,24 @@ export class InMemoryWalletAdapter
     if (!this.balances.has(userId)) {
       throw new DomainError('Wallet introuvable pour le crédit');
     }
-    this.balances.set(userId, round2(this.balanceOf(userId) + amount));
+    this.balances.set(userId, round2(this.currentBalance(userId) + amount));
     this.record(opKey, userId, amount);
+  }
+
+  // Reverse de crédit (compensation de saga), idempotent par opKey, ligne ledger signée négative.
+  async refund(userId: string, amount: number, opKey: string): Promise<void> {
+    if (this.appliedOps.has(opKey)) {
+      return;
+    }
+    if (!this.balances.has(userId)) {
+      throw new DomainError('Wallet introuvable pour le remboursement');
+    }
+    this.balances.set(userId, round2(this.currentBalance(userId) - amount));
+    this.record(opKey, userId, -amount);
+  }
+
+  async balanceOf(userId: string): Promise<number | null> {
+    return this.balances.has(userId) ? round2(this.balances.get(userId)!) : null;
   }
 
   async loadLedgerVsBalance(): Promise<WalletLedgerRow[]> {
@@ -77,7 +101,7 @@ export class InMemoryWalletAdapter
     this.movements.push({ userId, amount: round2(amount) });
   }
 
-  private balanceOf(userId: string): number {
+  private currentBalance(userId: string): number {
     return this.balances.get(userId) ?? this.defaultBalance;
   }
 }

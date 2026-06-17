@@ -323,6 +323,66 @@ describe('BetNext API (e2e, auth BET-20)', () => {
     await place('cap-3', 20).expect(403);
   });
 
+  it('shouldCreditWalletThenStayIdempotent_WhenPlayerDepositsViaStripeStub', async () => {
+    // Given — un joueur dont le wallet est ouvert par le gestionnaire
+    await register('depositor').expect(201);
+    const { token, userId } = await login('depositor');
+    await request(server())
+      .post('/wallet/open')
+      .set(...auth(managerTok))
+      .send({ userId, openingBalance: 100 })
+      .expect(200);
+
+    // When — dépôt de 50 (PSP stub : charge → crédit)
+    const dep = await request(server())
+      .post('/wallet/deposit')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Idempotency-Key', 'dep-1')
+      .send({ amount: 50 })
+      .expect(201);
+
+    // Then — fonds crédités, solde à 150
+    expect(dep.body).toMatchObject({ depositId: 'dep-1', amount: 50, status: 'CREDITED' });
+    const after = await request(server())
+      .get('/wallet/balance')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(after.body).toMatchObject({ userId, balance: 150 });
+
+    // When — rejeu du MÊME dépôt (retry réseau) : aucun double-crédit
+    await request(server())
+      .post('/wallet/deposit')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Idempotency-Key', 'dep-1')
+      .send({ amount: 50 })
+      .expect(201);
+    const replay = await request(server())
+      .get('/wallet/balance')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(replay.body.balance).toBe(150);
+  });
+
+  it('shouldReject_WhenDepositMissingTokenOrKeyOrInvalidAmount', async () => {
+    // When / Then
+    await request(server())
+      .post('/wallet/deposit')
+      .set('Idempotency-Key', 'no-auth')
+      .send({ amount: 50 })
+      .expect(401);
+    await request(server())
+      .post('/wallet/deposit')
+      .set(...auth(tokenA))
+      .send({ amount: 50 })
+      .expect(400);
+    await request(server())
+      .post('/wallet/deposit')
+      .set(...auth(tokenA))
+      .set('Idempotency-Key', 'bad-amount')
+      .send({ amount: -5 })
+      .expect(400);
+  });
+
   it('shouldCreateOnlyPlayerAndReturn403OnSettle_WhenRegisteringWithManagerRole', async () => {
     // Given
     await request(server())

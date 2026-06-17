@@ -141,6 +141,7 @@ curl -X POST http://localhost:3000/bets \
 | `GET /bets/stats` | PLAYER (scopé) | Betting (read-model, BET-23) |
 | `GET`/`PUT /responsible-gaming/daily-cap` | token | Compliance |
 | `POST /wallet/open` *(M)*, `GET /admin/reconciliation` *(M)* | MANAGER | Wallet |
+| `POST /wallet/deposit` (header `Idempotency-Key`), `GET /wallet/balance` | PLAYER (scopé) | Wallet (Stripe, BET-17) |
 | `GET /game-integration/upcoming` | public | Game Integration (BET-30) |
 | `POST /game-integration/esports/ingest` *(M)* | MANAGER | Game Integration (BET-30) |
 | `POST /game-integration/esports/sync-results` *(M)* | MANAGER | Game Integration (BET-32) |
@@ -148,8 +149,9 @@ curl -X POST http://localhost:3000/bets \
 > La cote affichée et la cote figée au pari proviennent désormais d'une **source unique** :
 > le read-model Redis (alimenté par Pricing), et la **cote d'ouverture** partagée
 > (`shared-kernel`, valeur `2.0`) quand le marché n'a encore aucun volume — voir
-> *Cotes d'ouverture (BET-28)* plus bas. Le wallet reste **fictif** (solde incrémenté,
-> Stripe = stretch non implémenté).
+> *Cotes d'ouverture (BET-28)* plus bas. Le wallet est **fictif par défaut** (solde incrémenté) ;
+> le **dépôt par Stripe** (saga + compensation) est désormais implémenté en option (BET-17, voir
+> *Dépôt de fonds* plus bas) — stub déterministe sans clé, adapter réel mode test avec `STRIPE_SECRET_KEY`.
 
 ## Persistance (BET-6)
 
@@ -456,6 +458,38 @@ Le monolithe tourne sur **Postgres** (store autoritaire). `main.ts` **échoue vi
 Wallet et Compliance. Preuve : `npm run test:bootstrap:pg` (schéma vierge → migrations
 idempotentes → app fonctionnelle → seed).
 
+## Dépôt de fonds — Saga Stripe + compensation/recrédit + Circuit Breaker (BET-17, ADR-004)
+
+Le joueur peut **déposer des fonds** qui créditent son wallet, via une **saga orchestrée**
+money-critical (`DepositFunds`, contexte Wallet) : `charge PSP → crédit wallet (atomique,
+journalisé au ledger) → étape aval optionnelle`. À **tout échec après la charge**, une
+**compensation idempotente** rembourse : reverse du crédit (kind `REFUND`, signé négatif) **puis**
+refund PSP, **+ notification** utilisateur via Outbox. L'ordre garantit que la plateforme n'est
+**jamais** à la fois remboursée *et* créditée (zéro perte) ; le refund PSP est rejouable.
+
+- **Port hexagonal `PaymentGateway`** (charge/refund) en **types domaine** — anti-corruption :
+  aucun champ Stripe (`payment_intent`, `client_secret`…) ne franchit le port. Deux adapters
+  sélectionnés **par ENV** (pattern Riot/esports) :
+  - **sans `STRIPE_SECRET_KEY`** → `StubPaymentGateway` (déterministe, idempotent) : démo **et CI
+    sans clé**, le dépôt crédite directement.
+  - **avec `STRIPE_SECRET_KEY` (`sk_test_…`)** → `StripePaymentGateway` **réel (mode test)**,
+    montants convertis en cents *dans* l'adapter, clé en `Authorization` uniquement (**jamais
+    loggée, jamais en URL**), enveloppé par `ResilientPaymentGateway` (**Circuit Breaker + timeout
+    + retry**, module partagé `shared/resilience`).
+- **Exactly-once / money-safety** : clé d'idempotence sur la charge (pas de double-charge), `opKey`
+  ledger `ON CONFLICT` (pas de double-crédit ni double-reverse), compensation rejouable (pas de
+  double-refund). **0 changement de schéma** : réutilise `wallet_operations` (kinds `CREDIT`/
+  `REFUND`) + `outbox`. Invariant `Σ(ledger) == solde` préservé → cohérent avec la réconciliation
+  (BET-15).
+- **API** : `POST /wallet/deposit` (header `Idempotency-Key`, scopé au joueur authentifié),
+  `GET /wallet/balance`. **UI** joueur : panneau « Mon portefeuille » (solde + dépôt).
+- **Tests** (TDD, money-path en CI) : happy path (charge→crédit, ledger correct), compensation
+  (échec aval → refund/reverse idempotents + notif), idempotence (retry → pas de double-mouvement),
+  circuit breaker (PSP down → fail-fast), non-fuite du format/secret Stripe.
+
+> Vérif Stripe **réelle** = séparée : collez une clé de **test** dans `.env`
+> (`STRIPE_SECRET_KEY=sk_test_…`) pour activer l'adapter réel. Aucune clé n'est committée.
+
 ## Authentification + RBAC + anti-IDOR (BET-20)
 
 Le contexte **Identity** porte l'auth. Inscription/connexion (`/auth/register`,
@@ -561,9 +595,10 @@ La pyramide de tests et la stratégie complète restent à étoffer (voir CI).
 POC pédagogique. Les **7 contextes** sont implémentés (Identity/auth, Wallet, Compliance,
 Catalog, Betting, Pricing, Game Integration) sur adapters **Postgres/Redis/BullMQ réels** ;
 le cœur (pari-mutuel, cote figée, idempotence, frontières, money-safety) est testé sur
-infra réelle. Restent **conçus, non implémentés** (calibrage POC, voir ADR) : Stripe/paiement
-externe (Saga stretch), `BetTypeStrategy` au placement et payout `PARTIAL`, settlement
-**automatique** du feed esports (la résolution reste manuelle via BET-12).
+infra réelle. Le **dépôt par paiement externe Stripe** (Saga orchestrée + compensation/recrédit
+idempotent + Circuit Breaker) est **implémenté** (BET-17 : stub sans clé, adapter réel mode test).
+Restent **conçus, non implémentés** (calibrage POC, voir ADR) : `BetTypeStrategy` au placement et
+payout `PARTIAL`.
 
 **BET-11 livré** : `placeBet` exposé en HTTP via une commande CQRS (`POST /bets`) + `GET /health` ;
 l'app est lançable (`npm start`) et couverte par un test e2e (santé + 201/400/422).
@@ -663,3 +698,13 @@ règle marchés + paris **exactly-once** (rejeu = no-op, prouvé en e2e). **Mone
 bascule sur de fausses données (source down → `PENDING`) ; résilience timeout/retry/circuit-breaker
 + rate-limit léger. Bouton admin « Synchroniser les résultats » ; les paris passent Gagné/Perdu.
 Un fixture **déjà terminé** prouve le règlement auto en démo. Voir **ADR-017**.
+
+**BET-17 livré** : **dépôt de fonds par Stripe** — **Saga orchestrée** `DepositFunds`
+(`charge PSP → crédit wallet atomique → étape aval`) + **compensation/recrédit idempotent**
+(reverse signé + refund PSP + notif Outbox) + **Circuit Breaker/timeout/retry**. Port hexagonal
+`PaymentGateway` (types domaine, **anti-corruption**) ; sélection **par ENV** : `StubPaymentGateway`
+(sans clé, déterministe) ou `StripePaymentGateway` **réel mode test** (`STRIPE_SECRET_KEY`, clé
+jamais loggée). Money-safety prouvée par tests (pas de double-charge/crédit/refund, charge-sans-
+crédit → remboursé, circuit ouvert → fail-fast). `POST /wallet/deposit` + `GET /wallet/balance` ;
+UI « Mon portefeuille ». **0 changement de schéma** (réutilise `wallet_operations` + `outbox`).
+Voir **ADR-004**.

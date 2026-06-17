@@ -395,6 +395,90 @@
         ]
       }
     },
+    "/wallet/deposit": {
+      "post": {
+        "operationId": "DepositController_deposit",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Clé par tentative, réutilisée au retry (anti double-charge/double-crédit).",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepositRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Fonds crédités (charge PSP réussie)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepositResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Idempotency-Key ou montant invalide"
+          },
+          "401": {
+            "description": "Token Bearer requis/invalide"
+          },
+          "422": {
+            "description": "Dépôt impossible : paiement remboursé (compensation)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "wallet"
+        ]
+      }
+    },
+    "/wallet/balance": {
+      "get": {
+        "operationId": "DepositController_balance",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Solde du joueur authentifié",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BalanceDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token Bearer requis/invalide"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "wallet"
+        ]
+      }
+    },
     "/markets": {
       "get": {
         "operationId": "CatalogController_list",
@@ -1143,6 +1227,71 @@
         "required": [
           "userId",
           "opened"
+        ]
+      },
+      "DepositRequest": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "example": 50,
+            "minimum": 0,
+            "description": "Montant à déposer (euros, > 0)"
+          }
+        },
+        "required": [
+          "amount"
+        ]
+      },
+      "DepositResultDto": {
+        "type": "object",
+        "properties": {
+          "depositId": {
+            "type": "string",
+            "example": "b1f2c3d4",
+            "description": "Identifiant du dépôt (= clé d'idempotence)"
+          },
+          "chargeId": {
+            "type": "string",
+            "example": "stub_ch_deposit:b1f2c3d4",
+            "description": "Référence opaque de la charge"
+          },
+          "amount": {
+            "type": "number",
+            "example": 50
+          },
+          "status": {
+            "type": "string",
+            "example": "CREDITED",
+            "enum": [
+              "CREDITED"
+            ]
+          }
+        },
+        "required": [
+          "depositId",
+          "chargeId",
+          "amount",
+          "status"
+        ]
+      },
+      "BalanceDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "example": "demo-player"
+          },
+          "balance": {
+            "type": "number",
+            "nullable": true,
+            "example": 150,
+            "description": "Solde courant (null si wallet inexistant)"
+          }
+        },
+        "required": [
+          "userId",
+          "balance"
         ]
       },
       "OutcomeDto": {

@@ -164,6 +164,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wallet/deposit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DepositController_deposit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wallet/balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DepositController_balance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/markets": {
         parameters: {
             query?: never;
@@ -499,6 +531,41 @@ export interface components {
              * @example true
              */
             opened: boolean;
+        };
+        DepositRequest: {
+            /**
+             * @description Montant à déposer (euros, > 0)
+             * @example 50
+             */
+            amount: number;
+        };
+        DepositResultDto: {
+            /**
+             * @description Identifiant du dépôt (= clé d'idempotence)
+             * @example b1f2c3d4
+             */
+            depositId: string;
+            /**
+             * @description Référence opaque de la charge
+             * @example stub_ch_deposit:b1f2c3d4
+             */
+            chargeId: string;
+            /** @example 50 */
+            amount: number;
+            /**
+             * @example CREDITED
+             * @enum {string}
+             */
+            status: "CREDITED";
+        };
+        BalanceDto: {
+            /** @example demo-player */
+            userId: string;
+            /**
+             * @description Solde courant (null si wallet inexistant)
+             * @example 150
+             */
+            balance: number | null;
         };
         OutcomeDto: {
             /** @example lol-finale-a */
@@ -1039,6 +1106,81 @@ export interface operations {
             };
             /** @description Solde d'ouverture invalide (doit être >= 0) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DepositController_deposit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Clé par tentative, réutilisée au retry (anti double-charge/double-crédit). */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepositRequest"];
+            };
+        };
+        responses: {
+            /** @description Fonds crédités (charge PSP réussie) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepositResultDto"];
+                };
+            };
+            /** @description Idempotency-Key ou montant invalide */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token Bearer requis/invalide */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Dépôt impossible : paiement remboursé (compensation) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DepositController_balance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Solde du joueur authentifié */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BalanceDto"];
+                };
+            };
+            /** @description Token Bearer requis/invalide */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

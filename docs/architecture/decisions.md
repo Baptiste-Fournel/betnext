@@ -98,7 +98,13 @@ Six rôles critiques ont attaqué l'architecture. Objections les plus fortes ret
 
 **Décision.** Deux régimes explicites :
 1. **Wallet fictif (défaut démo)** : pas d'orchestrateur. Le chemin argent est atomique (ADR-003). La **compensation/recrédit idempotent** est néanmoins *démontrée* via le parcours **« événement annulé → remboursement des paris en attente »** (équivalent de `cancelBetsForEvent`, `BettingService.php:100-118`), rendu **idempotent**.
-2. **Paiement externe (Stripe, stretch)** : *conçu* en **Saga orchestrée** + Outbox + idempotence + **transactions compensatoires** (recrédit) + **notification** utilisateur + Circuit Breaker/timeout/retry (opossum). C'est le flux du diagramme « placeBet en erreur de paiement » (voir `diagrams.md`).
+2. **Paiement externe (Stripe)** : **Saga orchestrée** + Outbox + idempotence + **transactions compensatoires** (recrédit) + **notification** utilisateur + Circuit Breaker/timeout/retry. C'est le flux du diagramme « placeBet en erreur de paiement » (voir `diagrams.md`).
+
+**Réalisé (BET-17).** Le régime 2 est désormais **implémenté** (dépôt de fonds) :
+- **Saga `DepositFunds`** (`wallet/application`) : `charge PSP → crédit wallet (atomique, ledger) → étape aval optionnelle`. À tout échec **après** la charge → **compensation idempotente** : reverse du crédit (kind `REFUND`, signé négatif) **puis** refund PSP, + **notification** via Outbox. Ordre choisi pour que la plateforme ne soit **jamais** à la fois remboursée et créditée (pas de perte) ; refund PSP rejouable (clé d'idempotence).
+- **Port hexagonal `PaymentGateway`** (charge/refund, **types domaine** — anti-corruption : aucun champ Stripe ne fuit) avec **deux adapters** sélectionnés par ENV (pattern Riot/esports) : `StubPaymentGateway` (déterministe, idempotent — démo/CI **sans clé**) ; `StripePaymentGateway` (réel, **mode test**, `STRIPE_SECRET_KEY`, montants en cents confinés à l'adapter, clé **jamais loggée**), enveloppé par `ResilientPaymentGateway` (**Circuit Breaker + timeout + retry** maison, module partagé `shared/resilience` — pas de dépendance opossum).
+- **Money-safety prouvée par tests** : pas de double-charge (clé d'idempotence), pas de double-crédit (`opKey` ledger `ON CONFLICT`), charge-sans-crédit → refund, compensation rejouée → pas de double-refund, circuit ouvert → fail-fast.
+- **0 changement de schéma** : réutilise `wallet_operations` (kinds `CREDIT`/`REFUND`) + table `outbox`. Endpoints : `POST /wallet/deposit` (header `Idempotency-Key`), `GET /wallet/balance` ; UI joueur « Mon portefeuille ».
 
 **Alternatives écartées.** *Saga orchestrée généralisée à tout pari dès le POC* : ~2-3 j de plomberie pour un chemin qui n'a **aucune étape externe async** par défaut → gold-plating (faisabilité). *Chorégraphie événementielle pure* : plus dure à raisonner/auditer pour une équipe junior sur de l'argent.
 
