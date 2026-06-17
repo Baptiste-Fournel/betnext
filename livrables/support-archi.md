@@ -47,14 +47,18 @@ Formation développeurs — partie architecture (≈ 20 min)
 
 ## Les bounded contexts (réels)
 
-**5 contextes implémentés** + un Shared Kernel :
+**7 contextes implémentés** + un Shared Kernel :
 
-`Betting` · `Wallet` · `Compliance` (Responsible Gaming) · `Catalog` · `Pricing`
+`Identity` (auth/RBAC) · `Wallet` · `Compliance` (Responsible Gaming) · `Catalog` ·
+`Betting` · `Pricing` · `Game Integration` (ACL Riot)
 
-- Communication **inter-contexte par événements** (Outbox + bus), **jamais** par import direct.
-- *(conçu, non implémentés : Identity/auth, Game Integration, Stripe.)*
+- Communication **inter-contexte par ports + événements** (Shared Kernel + Outbox/bus),
+  **jamais** par import direct (`dependency-cruiser`, 0 violation).
+- Coutures clés : `Wallet*Port`, `StakeGuardPort`, `MarketCreationPort`, `MarketSettlementPort`,
+  `TokenVerifierPort`.
+- *(conçu, non implémenté : Stripe / paiement externe — Saga stretch.)*
 
-<!-- 4:30 — Montrer src/contexts/. Honnêteté : 5 contextes réels, le reste est stub documenté. On ne survend pas. -->
+<!-- 4:30 — Montrer src/contexts/. Honnêteté : 7 contextes réels sur infra réelle. Seul Stripe reste conçu. On ne survend pas. -->
 
 ---
 
@@ -148,9 +152,12 @@ Formation développeurs — partie architecture (≈ 20 min)
 - **Niveau 1 — aujourd'hui, zéro code** : un « jeu » = un attribut ; créer son marché N-issues via
   `POST /markets`. Cotes, pose, règlement W/L/V : **génériques**, fonctionnent tels quels.
 - **Niveau 2 — nouveau type de pari** : +1 `SettlementStrategy` enregistrée.
-- **Niveau 3 — ingestion auto fournisseur** (`GameProvider`/ACL) : **conçu, non implémenté**.
+- **Niveau 3 — ingestion auto fournisseur** (`GameProvider`/ACL) : **implémenté pour Riot**
+  (BET-21/29) — featuring d'un match en un geste (`MarketCreationPort` → Catalog) + settlement
+  live (`MarketSettlementPort` → Betting). Un **nouveau** fournisseur = un adapter `GameProvider`
+  + son ACL, sans toucher le cœur.
 
-<!-- 21:00 — Renvoyer à l'atelier M8. Insister sur l'honnêteté des 3 niveaux : ce qui marche déjà vs ce qui reste à coder. -->
+<!-- 21:00 — Renvoyer à l'atelier M8. Honnêteté : Riot est branché (ACL + résilience). Ajouter un AUTRE fournisseur = un adapter de plus. -->
 
 ---
 
@@ -158,12 +165,14 @@ Formation développeurs — partie architecture (≈ 20 min)
 
 | Prouvé (tests réels) | Conçu, non implémenté |
 | --- | --- |
-| Atomicité argent (PG, 18 cas) | Identity / auth |
-| Réconciliation Σ=solde (PG) | Game Integration / `GameProvider` |
-| Cote async + idempotence (Redis) | Stripe (Saga stretch) |
-| Frontières (boundaries CI) | `PARTIAL` / bet-type au placement |
+| Atomicité argent (PG, 18 cas) | Stripe / paiement externe (Saga stretch) |
+| Réconciliation Σ=solde (PG) | `BetTypeStrategy` au **placement** + payout `PARTIAL` |
+| Cote async + idempotence (Redis) | Pricing **multi-marchés** simultanés (totaux par issue) |
+| Frontières (boundaries CI, 0 violation) | — |
+| Auth JWT + RBAC + anti-IDOR (BET-20) | |
+| Game Integration / Riot : ACL + résilience (BET-21/29) | |
 
-<!-- 22:00 — Message de clôture : la valeur du POC = savoir distinguer prouvé / conçu / à faire. C'est ça, la posture d'architecte. -->
+<!-- 22:00 — Message de clôture : la valeur du POC = savoir distinguer prouvé / conçu / à faire. C'est ça, la posture d'architecte. Identity et Game Integration sont passés du "conçu" au "prouvé". -->
 
 ---
 

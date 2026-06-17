@@ -6,36 +6,57 @@ d'architecte : chaque choix est justifié et chaque compromis assumé.
 
 > Le dossier d'architecture complet (décisions, compromis, diagrammes, modèle de données) est dans
 > [`docs/architecture/decisions.md`](docs/architecture/decisions.md),
-> [`docs/architecture/diagrams.md`](docs/architecture/diagrams.md) et
-> [`docs/architecture/data-model.md`](docs/architecture/data-model.md) (tables + choix de conception).
+> [`docs/architecture/diagrams.md`](docs/architecture/diagrams.md),
+> [`docs/architecture/data-model.md`](docs/architecture/data-model.md) (tables + choix de conception) et
+> [`livrables/analyse-microservices.md`](livrables/analyse-microservices.md)
+> (validation « ready-to-split » : topologie cible + ordre d'extraction, BET-24).
 
 ## Architecture en bref
 
 - **Monolithe modulaire NestJS « ready-to-split »** : 1 module Nest = 1 bounded context.
-- **Frontières dures vérifiées au build** (`dependency-cruiser`) : un import inter-contexte
-  casse la CI.
+  **7 contextes** dans `src/contexts/` (`identity`, `wallet`, `compliance`, `catalog`,
+  `betting`, `pricing`, `game-integration`) + un **Shared Kernel** (`src/shared-kernel/`,
+  types purs + **ports** inter-contextes).
+- **Frontières dures vérifiées au build** (`dependency-cruiser`, 5 règles) : un import inter-contexte
+  casse la CI (`npm run boundaries` → *0 violation* sur 249 modules, BET-26).
 - **Hexagonal** : la couche `domain` ne dépend ni de `application`, ni de `infrastructure`,
   ni d'un framework. Les use cases dépendent de **ports** (interfaces), pas d'adapters.
+  Coutures inter-contextes via ports du Shared Kernel : `WalletDebitPort`/`WalletCreditPort`,
+  `StakeGuardPort`, `MarketCreationPort`, `MarketSettlementPort`, `TokenVerifierPort`.
 - **Pricing extrait** en service séparé (`src/pricing.main.ts`) qui communique **uniquement par
   le bus** (BullMQ/Redis) — jamais d'appel in-process : preuve du déploiement indépendant
   (contrainte 3) et de la cote **asynchrone** (BET-8).
+- **Authentification + RBAC** (BET-20) : login JWT, rôles `PLAYER`/`MANAGER`, scoping
+  anti-IDOR (un joueur ne lit que ses propres paris). L'autorité est 100 % serveur.
+- **Game Integration / Riot** (BET-21, BET-29) : ACL fournisseur + résilience (circuit
+  breaker, timeout/retry) ; matchs Riot mis en avant et règlement live.
 - **Sécurité de l'argent** : chemin de pari atomique (une transaction), idempotence des
-  consommateurs, compensations sans double-crédit (voir ADR-003/004/008).
+  consommateurs, ledger signé + réconciliation, compensations sans double-crédit
+  (voir ADR-003/004/008/013).
+- **Deux fronts Next.js** (BET-22, BET-27) : `web/apps/player` (:3001) et `web/apps/admin`
+  (:3002), clients minces type-safe sur le contrat OpenAPI généré.
 
 ## Structure
 
 ```
 src/
-  shared-kernel/domain/        Odds (VO), DomainEvent — partagés entre contextes
+  shared-kernel/               Odds, DomainEvent, idempotence + ports inter-contextes
   contexts/
-    pricing/    domain (OddsCalculator pari-mutuel) | pricing.module (extractible)
-    betting/    domain (Bet, états) | application (PlaceBet + ports) | infrastructure (adapters)
-    wallet/     domain (Wallet idempotent)
-    catalog/    domain (SportEvent N-issues, Outcome)
+    identity/         auth JWT, RBAC, vérification de token (BET-20)
+    wallet/           Wallet idempotent, ledger signé, réconciliation
+    compliance/       plafond quotidien (Responsible Gaming)
+    catalog/          SportEvent N-issues générique, création de marché
+    betting/          domain (Bet, états) | application (PlaceBet, settlement, stats + ports) | infra
+    pricing/          domain (OddsCalculator pari-mutuel) | pricing.module (extractible)
+    game-integration/ ACL Riot + résilience, matchs featured, settlement live (BET-21/29)
+  read-model/                  read-model Redis des cotes + SSE
+  messaging/                   Transactional Outbox + BullMQ + idempotence consommateur
+  persistence/                 TypeORM / migrations (Postgres)
   app.module.ts                composition du monolithe
   main.ts                      bootstrap monolithe
   pricing.main.ts              bootstrap du service Pricing extrait
-docs/architecture/             dossier d'architecture (ADR + diagrammes)
+docs/architecture/             dossier d'architecture (ADR + diagrammes + analyse microservices)
+web/                           monorepo front (apps/player :3001, apps/admin :3002)
 livrables/                     livrables finaux (export)
 ```
 
@@ -48,50 +69,85 @@ Node.js ≥ 20, npm.
 ```bash
 npm ci                 # installe les dépendances (CI) ; en local : npm install
 npm test               # tests unitaires (TDD) — domaine pur, sans framework ni I/O
-npm run boundaries     # vérifie les frontières inter-contextes (ready-to-split)
+npm run boundaries     # vérifie les frontières inter-contextes (5 règles ; ready-to-split)
+npm run test:naming    # convention de nommage des tests (shouldXxx_WhenXxx — BET-26)
 npm run lint           # ESLint
 npm run format:check   # Prettier (vérification)
 npm run build          # compilation TypeScript
-npm start              # démarre le monolithe (port 3000) + relais Outbox si REDIS_URL
-npm run start:pricing  # démarre le service Pricing extrait (worker bus-only ; exige REDIS_URL)
-npm run test:pricing:redis  # e2e Pricing sur vrai Redis (CI) : outbox→relais→bus→OddsUpdated
-npm run test:readmodel:redis # e2e read-model sur vrai Redis (CI) : OddsUpdated→projecteur→lecture
+
+# Démarrage du back (Postgres + AUTH_SECRET REQUIS depuis BET-19/20). main.ts ne charge pas
+# .env lui-même → on le passe à Node (≥ 20.6) :
+npm run db:up                              # docker compose : Postgres
+cp .env.example .env                       # renseigner DATABASE_URL + AUTH_SECRET
+npm run build && npm run db:seed           # migrations + données de démo (users, marchés)
+node --env-file=.env dist/main.js          # monolithe sur :3000 (Swagger /docs) + relais Outbox si REDIS_URL
+node --env-file=.env dist/pricing.main.js  # service Pricing extrait (bus-only ; exige REDIS_URL)
+
+# Fronts (deux apps Next.js) — voir web/README.md
+cd web && npm install
+npm run dev:player     # http://localhost:3001 (login demo-player / changeme123)
+npm run dev:admin      # http://localhost:3002 (login demo-manager / changeme123)
+
+# Preuves money-safety & async sur infra réelle (CI)
+npm run test:atomicity:pg        # zéro perte : débit + pari + events + outbox en 1 tx (18 cas)
+npm run test:reconciliation:pg   # ledger signé Σ=solde, dérive injectée détectée (BET-15)
+npm run test:bootstrap:pg        # schéma vierge → app fonctionnelle + seed (BET-19/29)
+npm run test:pricing:redis       # Pricing bus-only : outbox→relais→bus→OddsUpdated
+npm run test:readmodel:redis     # read-model : OddsUpdated→projecteur→lecture
 ```
 
-## API HTTP (BET-11)
+## API HTTP (BET-11, BET-20)
 
-Lancer l'API en local :
+Lancer l'API en local : voir le bloc **Commandes** ci-dessus (Postgres + `AUTH_SECRET`
+requis ; `node --env-file=.env dist/main.js`). Swagger sur `/docs`.
 
-```bash
-npm install      # 1re fois
-npm run build
-npm start        # http://localhost:3000
-```
-
-Endpoints :
+Depuis BET-20, les routes métier exigent un **token Bearer** (rôle `PLAYER` ou `MANAGER`).
+On l'obtient via `/auth` :
 
 ```bash
-# Santé
+# Santé (public)
 curl http://localhost:3000/health
 # → {"status":"ok","service":"betnext","timestamp":"..."}
 
-# Poser un pari (commande via CQRS) → 201. Le header Idempotency-Key est OBLIGATOIRE.
+# S'authentifier → renvoie un token JWT (champ `token`)
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"demo-player","password":"changeme123"}'
+# → {"userId":"demo-player","role":"PLAYER","token":"eyJ…","expiresInSec":3600}
+
+# Poser un pari (commande via CQRS) → 201. Idempotency-Key OBLIGATOIRE ; userId pris du token
+# (jamais du corps → anti-usurpation).
 curl -X POST http://localhost:3000/bets \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJ…" \
   -H "Idempotency-Key: 3f9c-…" \
-  -d '{"userId":"u1","outcomeId":"o1","stake":20}'
-# → {"betId":"...","lockedOdds":2,"potentialGain":40}
+  -d '{"outcomeId":"o1","stake":20}'
+# → {"betId":"...","lockedOdds":2,"potentialGain":40,"pricingProvisional":true}
 
-# Header Idempotency-Key absent → 400
-# Forme invalide (champ manquant / type) → 400
-# Mise <= 0 (invariant métier, levé par le domaine) → 422
-# Même clé + même corps → MÊME betId (aucun 2e pari ni débit)
-# Même clé + corps différent → 409 (conflit) ; tentative concurrente non finie → 425
+# Sans token → 401 ; mauvais rôle (PLAYER sur route MANAGER) → 403
+# Header Idempotency-Key absent → 400 ; forme invalide → 400 ; mise <= 0 → 422
+# Même clé + même corps → MÊME betId ; même clé + corps différent → 409 ; concurrent non fini → 425
 ```
 
-> **Valeurs par défaut de POC — NON tranchées, faciles à changer** : la cote vient d'un
-> `StaticOddsProvider` figé à **2.0** (sera remplacé par le read-model alimenté par Pricing —
-> ADR-006/007) ; wallet et catalogue sont des stubs en mémoire.
+**Carte des endpoints** (routes métier sous Bearer ; *(M)* = rôle MANAGER requis) :
+
+| Route | Rôle | Contexte |
+|-------|------|----------|
+| `POST /auth/register`, `POST /auth/login`, `GET /auth/me` | public / token | Identity |
+| `GET /markets`, `GET /odds/:id`, `GET /streams/odds` (SSE) | public | Catalog / read-model |
+| `POST /markets` *(M)*, `POST /markets/settle` *(M)* | MANAGER | Catalog / Betting |
+| `POST /bets`, `GET /bets`, `GET /bets/:id`, `GET /bets/:id/events` | PLAYER (scopé) | Betting |
+| `GET /bets/stats` | PLAYER (scopé) | Betting (read-model, BET-23) |
+| `GET`/`PUT /responsible-gaming/daily-cap` | token | Compliance |
+| `POST /wallet/open` *(M)*, `GET /admin/reconciliation` *(M)* | MANAGER | Wallet |
+| `GET /game-integration/featured` | public | Game Integration (BET-29) |
+| `POST /game-integration/featured`, `POST /game-integration/matches`, `.../matches/:id/sync` *(toutes M)* | MANAGER | Game Integration (BET-21/29) |
+
+> La cote affichée et la cote figée au pari proviennent désormais d'une **source unique** :
+> le read-model Redis (alimenté par Pricing), et la **cote d'ouverture** partagée
+> (`shared-kernel`, valeur `2.0`) quand le marché n'a encore aucun volume — voir
+> *Cotes d'ouverture (BET-28)* plus bas. Le wallet reste **fictif** (solde incrémenté,
+> Stripe = stretch non implémenté).
 
 ## Persistance (BET-6)
 
@@ -99,17 +155,20 @@ Le pari est persisté avec sa **cote figée** et son **gain potentiel** (stocké
 recalculés à la lecture) ; chaque transition alimente un **journal d'événements append-only**
 (Event Sourcing ciblé sur le seul agrégat `Bet` — audit / rejeu).
 
-Deux modes, pilotés par `DATABASE_URL` :
+Depuis **BET-19**, Postgres est le **store par défaut REQUIS** : `main.ts` refuse de
+démarrer sans `DATABASE_URL` (et sans `AUTH_SECRET`). Les migrations sont jouées au
+démarrage.
 
 ```bash
-# Mode Postgres (migrations jouées au démarrage)
-cp .env.example .env          # renseigner DATABASE_URL
+cp .env.example .env          # renseigner DATABASE_URL + AUTH_SECRET
 npm run db:up                 # docker compose : Postgres
-npm run build && npm start
-
-# Mode sans DB (POC rapide) — DATABASE_URL vide → adapter en mémoire
-npm start
+npm run build && npm run db:seed
+node --env-file=.env dist/main.js
 ```
+
+> L'**adapter en mémoire** existe toujours (sélectionné quand aucun `DataSource` n'est
+> fourni) mais il est désormais **réservé aux tests** (e2e in-memory, scripts) — ce n'est
+> plus un mode de lancement du monolithe.
 
 - Adapter derrière un **port hexagonal** (`BetRepository`) : aucune fuite TypeORM dans le
   domaine ni les use cases.
@@ -387,6 +446,88 @@ rapporté). Non-régression money-safety : `npm run test:atomicity:pg` (18 cas, 
 > POC, à durcir avec Identity) ; purge de `wallet_operations` à faire **sans casser l'invariant**
 > (snapshot de solde requis).
 
+## Postgres par défaut + Catalog persistant (BET-19)
+
+Le monolithe tourne sur **Postgres** (store autoritaire). `main.ts` **échoue vite** si
+`DATABASE_URL`/`AUTH_SECRET` manquent (pas de démarrage silencieux en mémoire). Le
+**Catalog** est désormais persistant (`TypeOrmMarketCatalog`), au même titre que Betting,
+Wallet et Compliance. Preuve : `npm run test:bootstrap:pg` (schéma vierge → migrations
+idempotentes → app fonctionnelle → seed).
+
+## Authentification + RBAC + anti-IDOR (BET-20)
+
+Le contexte **Identity** porte l'auth. Inscription/connexion (`/auth/register`,
+`/auth/login`) émettent un **JWT** signé par `AUTH_SECRET` ; `GET /auth/me` renvoie
+l'identité courante. Deux rôles : **`PLAYER`** et **`MANAGER`**.
+
+- **Garde d'authentification** (`JwtAuthGuard`) sur toutes les routes métier ; un appel
+  sans token valide → **401**.
+- **Garde de rôle** (`RolesGuard` + `@Roles('MANAGER')`) sur les écritures sensibles :
+  `POST /markets`, `POST /markets/settle`, `POST /wallet/open`, `GET /admin/reconciliation`,
+  écritures Game Integration → un `PLAYER` obtient **403**.
+- **Scoping anti-IDOR** : `userId` provient **du token**, jamais du corps ni de l'URL. La
+  liste/lecture des paris (`GET /bets`, `/bets/:id`, `/bets/:id/events`, `/bets/stats`) est
+  **filtrée par le joueur authentifié** — un pari non possédé renvoie **404** (pas de fuite
+  d'existence). Le port partagé `TokenVerifierPort` (Shared Kernel) garde la vérification
+  côté frontière.
+
+> L'autorité reste **100 % serveur** : le scoping par rôle côté front (`<AppShell>`) n'est
+> qu'une UX ; un client forgé n'obtient que des 401/403 du back.
+
+## Game Integration — ACL Riot, résilience, matchs featured (BET-21, BET-29)
+
+Le contexte **Game Integration** intègre un fournisseur réel (Riot) derrière un **ACL** et
+des **ports du Shared Kernel** — il ne connaît ni Catalog ni Betting en direct.
+
+- **ACL + résilience** : `RiotGameProvider` traduit le modèle externe ; `ResilientRiotClient`
+  ajoute **timeout + retry** et un **circuit breaker** (`failureThreshold: 5`,
+  `resetTimeoutMs: 30s`). Sans `RIOT_API_KEY`, un `StubRiotClient` fait tourner la démo/CI
+  **sans réseau ni clé**.
+- **Matchs featured en un geste** (BET-29) : `POST /game-integration/featured` *(MANAGER)*
+  crée le marché N-issues via **`MarketCreationPort`** (→ Catalog) et enregistre le lien
+  match→marché. `GET /game-integration/featured` (public) liste les matchs mis en avant pour
+  le joueur.
+- **Règlement live** : `POST /game-integration/matches/:id/sync` *(MANAGER)* lit le résultat
+  Riot et déclenche le règlement via **`MarketSettlementPort`** (→ Betting). L'argent ne
+  traverse jamais la frontière : le crédit reste **dans la transaction de Betting**
+  (money-safety préservée).
+
+## Cotes d'ouverture — source unique (BET-28)
+
+Tant qu'un marché n'a **aucun volume**, le modèle pari-mutuel ne produit pas de cote (pas de
+division par zéro). La **cote d'ouverture** est alors servie depuis une **source unique
+partagée** (`src/shared-kernel/domain/OpeningOdds.ts`, valeur `2.0`), consommée **à la fois**
+par la cote affichée (read-model) et par la cote figée au pari (Betting) :
+`afficher == figer`. Quand cette valeur d'ouverture est utilisée, la réponse de pose porte
+`pricingProvisional: true` (latence/cohérence éventuelle **observable** côté client). En
+shared-kernel car Betting ne peut pas importer Pricing (frontière).
+
+## Statistiques joueur scopées (BET-23)
+
+`GET /bets/stats` renvoie des **agrégats du joueur authentifié uniquement** (nombre de paris,
+mises, gains, P&L…) calculés côté **read-model** (chemin LECTURE du CQRS), jamais sur le
+chemin d'écriture. Le panneau « Mes statistiques » du front les affiche. Scoping anti-IDOR
+identique au reste de Betting (par token).
+
+## Conventions & CI durcie (BET-26)
+
+- **Nommage des tests** : convention `shouldXxx_WhenXxx` + structure AAA/GWT, vérifiée par un
+  gate CI dédié (`npm run test:naming`).
+- **Frontières durcies** : les 5 règles `dependency-cruiser` (`no-cross-context`,
+  `domain-stays-pure`, `domain-no-tech`, `application-no-infra`, `application-no-tech`)
+  cassent le build à toute violation.
+- **Pipeline** (`.github/workflows/ci.yml`) : `format:check` → `lint` → `boundaries` →
+  `test:naming` → `test` → `build` → scripts Postgres réels (atomicité, réconciliation,
+  bootstrap) → scripts Redis réels (outbox, pricing, read-model) → **build des 2 fronts**
+  (typecheck + lint + build, garde de contrat incluse).
+
+## Front — vraie app de paris en français (BET-22, BET-27)
+
+Deux apps Next.js séparées par rôle (détails : section *Front* ci-dessous et `web/README.md`).
+**BET-27** a transformé l'UI en **vraie app sportsbook entièrement en français** (parcours
+joueur et gestionnaire, libellés, états). Les deux apps partagent le contrat OpenAPI généré
+et `@betnext/ui` — zéro logique métier côté front.
+
 ## Approche TDD
 
 Les règles de domaine sont écrites en **test-first** et restent indépendantes du framework :
@@ -396,9 +537,12 @@ La pyramide de tests et la stratégie complète restent à étoffer (voir CI).
 
 ## Statut
 
-POC pédagogique. Les contextes Identity / Compliance / Game Integration et les adapters
-Postgres/Redis/BullMQ sont volontairement des **stubs documentés** à ce stade ; le cœur
-(pari-mutuel, cote figée, idempotence, frontières) est implémenté et testé.
+POC pédagogique. Les **7 contextes** sont implémentés (Identity/auth, Wallet, Compliance,
+Catalog, Betting, Pricing, Game Integration) sur adapters **Postgres/Redis/BullMQ réels** ;
+le cœur (pari-mutuel, cote figée, idempotence, frontières, money-safety) est testé sur
+infra réelle. Restent **conçus, non implémentés** (calibrage POC, voir ADR) : Stripe/paiement
+externe (Saga stretch), `BetTypeStrategy` au placement et payout `PARTIAL`, ingestion Riot
+multi-marchés simultanés (Pricing tient des totaux par issue, isolation par `eventId` flaggée).
 
 **BET-11 livré** : `placeBet` exposé en HTTP via une commande CQRS (`POST /bets`) + `GET /health` ;
 l'app est lançable (`npm start`) et couverte par un test e2e (santé + 201/400/422).
@@ -451,3 +595,34 @@ historique/timeline, plafond) et gestionnaire (créer/régler) ; états loading/
 idempotent, **sans auto-correction**), **intra-Wallet** (frontière), insensible à l'async **en vol**.
 Prouvé sur **vrai Postgres** (`npm run test:reconciliation:pg` : dérive injectée détectée sans
 correction, idempotence, multi-wallets) + non-régression `test:atomicity:pg` (débit journalisé).
+
+**BET-19 livré** : **Postgres store par défaut** (démarrage refusé sans `DATABASE_URL`) +
+**Catalog persistant** (`TypeOrmMarketCatalog`) ; bootstrap d'un schéma vierge prouvé
+(`npm run test:bootstrap:pg`).
+
+**BET-20 livré** : **authentification JWT + RBAC** (`PLAYER`/`MANAGER`, `JwtAuthGuard` +
+`RolesGuard`) + **scoping anti-IDOR** (`userId` issu du token ; paris non possédés → 404) ;
+vérification de token via port partagé `TokenVerifierPort`.
+
+**BET-21 livré** : **Game Integration / Riot** — `GameProvider` + **ACL** + résilience
+(circuit breaker, timeout/retry, stub sans clé) + settlement automatique via
+`MarketSettlementPort`.
+
+**BET-22 livré** : front scindé en **deux apps Next.js** (joueur :3001 / admin :3002) +
+packages partagés (`@betnext/ui`, `@betnext/api-contract`) ; ESLint des apps autonome en CI.
+
+**BET-23 livré** : **stats joueur scopées** (`GET /bets/stats`, read-model CQRS) + panneau
+« Mes statistiques » côté front.
+
+**BET-26 livré** : **conventions + CI durcie** — nommage des tests `shouldXxx_WhenXxx`
+(gate `test:naming`), 5 règles `dependency-cruiser`, pipeline durci.
+
+**BET-27 livré** : **UI vraie app de paris**, entièrement **en français** (parcours joueur +
+gestionnaire).
+
+**BET-28 livré** : **cotes d'ouverture** servies depuis une **source unique** partagée
+(`shared-kernel`, `2.0`) — `afficher == figer` ; champ de contrat `pricingProvisional`.
+
+**BET-29 livré** : **matchs Riot featured one-step** (`POST /game-integration/featured` →
+marché via `MarketCreationPort`) + **liste publique** (`GET /game-integration/featured`) +
+**settlement live** (`.../matches/:id/sync`).

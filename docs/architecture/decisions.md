@@ -255,6 +255,73 @@ Plafond quotidien configurable **par joueur**, calculé **net des annulations/re
 
 ---
 
+### ADR-014 — Coutures inter-contextes réalisées : ports `MarketCreationPort` / `MarketSettlementPort` + cote d'ouverture **source unique** (BET-21/28/29)
+
+**Décision.** Les frontières conçues (ADR-001/009) sont **matérialisées par des ports du
+Shared Kernel**, pas par des imports inter-contextes. Au-delà du chemin argent
+(`WalletDebitPort`/`WalletCreditPort`/`StakeGuardPort`), deux ports portent l'intégration des
+jeux : **`MarketCreationPort`** (Game Integration crée un marché N-issues → implémenté par
+`CatalogMarketCreation` côté Catalog) et **`MarketSettlementPort`** (Game Integration déclenche
+le règlement → implémenté par `CommandBusMarketSettlement` côté Betting). Game Integration ne
+connaît **ni Catalog ni Betting** : il dépend d'interfaces du Shared Kernel (vérifié
+dependency-cruiser, 0 violation). En complément, la **cote d'ouverture** (servie tant qu'un
+marché n'a aucun volume) est une **source unique** dans `shared-kernel`
+(`OpeningOdds`, `2.0`), consommée à la fois par la cote **affichée** (read-model) et la cote
+**figée** au pari (Betting) → invariant *afficher == figer* ; le drapeau `pricingProvisional`
+rend la provenance d'ouverture **observable**.
+
+**Alternatives écartées.** (a) *Game Integration appelle directement les use cases Catalog/Betting* :
+import inter-contexte → casse `no-cross-context` et le « ready-to-split ». (b) *Deux constantes
+de cote d'ouverture (une côté read-model, une côté Betting)* : risque de divergence
+afficher ≠ figer → faille money-safety ; rejeté au profit d'une source unique partagée.
+
+**Compromis.**
+- **Gain** : l'extraction de Game Integration = **changer l'adapter du port, pas le métier**
+  (cf. `livrables/analyse-microservices.md`, §3) ; afficher == figer garanti par construction.
+- **Perte** : un port de plus à maintenir dans le Shared Kernel ; la cote d'ouverture est une
+  valeur figée (`2.0`) assumée comme convention de POC.
+- **Condition** : tout nouvel échange inter-contexte passe par un **port** (jamais un import) ;
+  le Shared Kernel reste **sans techno** (types purs uniquement).
+
+**Ancrage.** `src/shared-kernel/ports/{MarketCreationPort,MarketSettlementPort}.ts`,
+`src/contexts/catalog/infrastructure/CatalogMarketCreation.ts`,
+`src/contexts/betting/infrastructure/CommandBusMarketSettlement.ts`,
+`src/shared-kernel/domain/OpeningOdds.ts`. Résilience Riot (ACL + circuit breaker) :
+`src/contexts/game-integration/infrastructure/riot/`.
+
+---
+
+### ADR-015 — Autorité 100 % serveur (RBAC + anti-IDOR) et front **scindé par rôle** (BET-20/22/27)
+
+**Décision.** L'autorisation est **entièrement côté serveur**. Auth JWT (contexte Identity,
+port `TokenVerifierPort`), deux rôles `PLAYER`/`MANAGER`. `JwtAuthGuard` protège les routes
+métier (401 sinon) ; `RolesGuard` + `@Roles('MANAGER')` protège les écritures sensibles
+(création/règlement de marché, ouverture wallet, réconciliation, écritures Game Integration —
+403 sinon). **Anti-IDOR** : le `userId` vient **du token**, jamais du corps/URL ; un pari non
+possédé renvoie **404**. Le **front est scindé en deux apps** (`web/apps/player` :3001,
+`web/apps/admin` :3002) : le scoping de rôle côté front est une **UX**, pas une garantie — un
+client forgé n'obtient que des 401/403.
+
+**Alternatives écartées.** (a) *Une seule app front qui masque/affiche selon le rôle* :
+mélange les surfaces et tente de faire porter la sécurité au client → rejeté (autorité
+serveur). (b) *`userId` dans le corps de `POST /bets`* : usurpation triviale → rejeté au profit
+du sujet authentifié.
+
+**Compromis.**
+- **Gain** : sécurité non contournable côté client ; surfaces déployables séparément
+  (deux artefacts front) ; scoping des lectures par joueur (pas de fuite cross-utilisateur).
+- **Perte** : duplication de coquille entre les deux apps (mutualisée via `@betnext/ui`) ;
+  un secret `AUTH_SECRET` requis au démarrage (échec rapide si absent).
+- **Condition** : aucune décision d'autorisation déléguée au front ; tout endpoint métier
+  derrière `JwtAuthGuard` ; lectures de paris **toujours** scopées par le sujet du token.
+
+**Ancrage.** `src/shared/auth/{jwt-auth.guard,roles.guard}.ts`,
+`src/contexts/identity/`, `src/shared-kernel/ports/TokenVerifierPort.ts`,
+contrôleurs `@Roles('MANAGER')` (Settlement/Catalog/Wallet/Reconciliation/GameIntegration),
+`web/apps/{player,admin}` + `web/README.md`.
+
+---
+
 ## 4. Risques résiduels & questions probables du jury
 
 ### 4.1 Risques résiduels (fragile / à valider)

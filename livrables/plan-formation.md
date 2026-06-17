@@ -8,6 +8,27 @@
 > non codé* est explicitement marqué « **(conçu, non implémenté)** ». Les références pointent vers le
 > code et `docs/architecture/`.
 
+> ⚠️ **À RAFRAÎCHIR — finalisation BET-16.** Ce plan a été rédigé à l'état BET-5→18 ; plusieurs
+> passages sont **périmés** depuis BET-19→29 et doivent être corrigés avant remise (laissés en
+> l'état ici, hors périmètre de la synchro doc BET-24) :
+> - **§1 obj. 2 & §3 (M0)** : « **5 bounded contexts** » → désormais **7** (ajout d'`identity` et
+>   `game-integration`).
+> - **§3 (M0)** : lancement « `npm start` » → le back **exige** `DATABASE_URL` + `AUTH_SECRET` et ne
+>   charge pas `.env` lui-même → `node --env-file=.env dist/main.js` (BET-19/20).
+> - **§5.3 (Niveau 3)** : « **Game Integration / `GameProvider` : conçu, non implémenté**, pas de
+>   contexte `game-integration` » → **FAUX depuis BET-21/29** : ACL Riot + résilience + featuring +
+>   settlement live **implémentés**. À réécrire en « ajouter un **autre** fournisseur = un adapter ».
+> - **§7** : liste « BET-5/6/7/8/10/11/12/13/14/15/18 » → ajouter **19/20/21/22/23/26/27/28/29** ;
+>   chemins code « `{betting,wallet,catalog,compliance,pricing}` » → ajouter **`identity`,
+>   `game-integration`** + `web/apps/{player,admin}`.
+> - **§8** : « **Identity / auth : absent** » et « **Game Integration : conçu, non implémenté** » →
+>   **périmés** (BET-20/21). Ne restent « conçu, non implémenté » que : Stripe, `BetTypeStrategy` au
+>   placement + `PARTIAL`, Pricing multi-marchés simultanés.
+> - Un **module formation « Auth/RBAC + anti-IDOR » (BET-20)** manque et serait à ajouter.
+>
+> Faits réels vérifiés et à jour dans : `README.md`, `docs/architecture/decisions.md`
+> (ADR-014/015), `livrables/analyse-microservices.md`, `livrables/support-archi.md`.
+
 ---
 
 ## 1. Public, pré-requis, objectifs
