@@ -1,6 +1,6 @@
 # BetNext — Diagrammes d'architecture cible
 
-> Diagrammes Mermaid (rendus dans la plupart des visualiseurs Markdown). À lire avec `decisions.md` (les ADR référencés justifient chaque choix). Aucune donnée inventée : les flux reflètent les ADR-001 à 011.
+> Diagrammes Mermaid (rendus dans la plupart des visualiseurs Markdown). À lire avec `decisions.md` (les ADR référencés justifient chaque choix). Aucune donnée inventée : les flux reflètent les ADR-001 à 018.
 
 ## 1. C4 — Niveau 1 : contexte système
 
@@ -16,7 +16,7 @@ flowchart TB
         sys["Monolithe modulaire NestJS<br/>+ service Pricing extrait"]
     end
 
-    riot["LoL Esports / Riot API<br/>événements, scores"]
+    riot["LoL Esports<br/>matchs à venir, scores"]
     stripe["Stripe<br/>paiement (optionnel / stretch)"]
     notif["Service de notification<br/>e-mail / push"]
 
@@ -51,7 +51,7 @@ flowchart TB
 
     pg[("PostgreSQL<br/>write model + journal Bet + Outbox")]
     redis[("Redis<br/>read-model marché chaud + file BullMQ")]
-    riot["LoL Esports / Riot API"]
+    riot["LoL Esports"]
 
     ui -->|HTTPS| betting
     ui -->|HTTPS| catalog

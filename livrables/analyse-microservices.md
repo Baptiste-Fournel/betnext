@@ -30,12 +30,12 @@ une seule fois dans la racine `src/app.module.ts:18-32`.
 | 4 | **Catalog** | `src/contexts/catalog/catalog.module.ts` | Marchés N-issues, création de marché | oui (Postgres) |
 | 5 | **Betting** | `src/contexts/betting/betting.module.ts` | `placeBet`, settlement, historique, stats | oui (Postgres) |
 | 6 | **Pricing** | `src/contexts/pricing/pricing.module.ts` | Calcul de cote pari-mutuel | **non — état dérivé via bus (Redis)** |
-| 7 | **Game Integration** | `src/contexts/game-integration/game-integration.module.ts` | ACL Riot, featuring de matchs, settlement live | non (store en mémoire / lien) |
+| 7 | **Game Integration** | `src/contexts/game-integration/game-integration.module.ts` | ACL LoL Esports, featuring de matchs, settlement live | non (store en mémoire / lien) |
 | 8 | **Shared Kernel** | `src/shared-kernel/` | Types purs + **ports** inter-contextes | n/a |
 
 Le Shared Kernel ne contient **que** des primitives de domaine sans techno
 (`Odds`, `OpeningOdds`, `DomainEvent`, `DomainError`, idempotence) et les **6 ports**
-qui matérialisent les coutures entre contextes (`src/shared-kernel/index.ts`) :
+qui matérialisent les coutures entre contextes (`src/shared-kernel/ports/`) :
 
 - `WalletDebitPort`, `WalletCreditPort` — chemin argent (Betting → Wallet) ;
 - `StakeGuardPort` — garde de plafond (Betting → Compliance) ;
@@ -74,10 +74,10 @@ Config réelle : `.dependency-cruiser.cjs` (script `npm run boundaries`,
 **Résultat à `fde52d4` :**
 
 ```
-✔ no dependency violations found (249 modules, 752 dependencies cruised)
+✔ no dependency violations found (287 modules, 858 dependencies cruised)
 ```
 
-→ **249 modules, 752 dépendances, 0 violation** (`error: 0, warn: 0`).
+→ **287 modules, 858 dépendances, 0 violation** (`error: 0, warn: 0`).
 
 ### 1.4 Graphe de dépendances réel (preuve « ready-to-split »)
 
@@ -178,7 +178,7 @@ graph LR
 
   subgraph extracted["SERVICES EXTRAITS (scale-out / isolement)"]
     P[Pricing<br/>déjà extrait — BET-8]
-    GI[Game Integration<br/>ACL Riot]
+    GI[Game Integration<br/>ACL LoL Esports]
   end
 
   RM[(Read-model<br/>Redis : cotes/reporting)]
@@ -192,14 +192,14 @@ graph LR
 
   GI -- MarketCreationPort --> CAT
   GI -- MarketSettlementPort --> B
-  GI -. ACL .-> RIOT[(API Riot externe)]
+  GI -. ACL .-> LOL[(API LoL Esports externe)]
 ```
 
 | Cible | Contextes | Justification |
 |-------|-----------|---------------|
 | **Service « cœur transactionnel »** | Betting, Wallet, Compliance, Catalog, Identity | **Cohésion + money-safety.** Betting↔Wallet partagent une transaction Postgres (ADR-003) ; les séparer recrée un dual-write sur l'argent. Compliance (garde de plafond, `StakeGuardPort`), Catalog (`MarketCreationPort`) et Identity sont à faible débit et fortement co-sollicités sur le chemin d'écriture → restent groupés. Le découpage interne reste **logique** (modules + ports), prêt à promouvoir si le besoin survient. |
 | **Service Pricing** *(extrait)* | Pricing | **Scalabilité (C1) + déploiement indépendant (C3) d'un même geste.** Composant chaud, `O(nb paris)`, quasi-stateless, alimenté **uniquement par événements**. Scale-out par N workers. Déjà prouvé (1.2). |
-| **Service Game Integration** *(candidat n°1)* | Game Integration | **Isolement d'un tiers.** ACL + résilience (circuit breaker, timeout/retry) autour de l'API Riot (`game-integration.module.ts:31-46`). Cadence de déploiement dictée par un tiers ≠ celle du cœur. I/O-bound, pas sur le chemin argent. |
+| **Service Game Integration** *(candidat n°1)* | Game Integration | **Isolement d'un tiers.** ACL + résilience (circuit breaker, timeout/retry) autour de l'API LoL Esports (`game-integration.module.ts:31-46`). Cadence de déploiement dictée par un tiers ≠ celle du cœur. I/O-bound, pas sur le chemin argent. |
 | **Read-model** *(déjà séparable)* | (infra, pas un contexte) | Redis = cache reconstructible des cotes/reporting public (ADR-006). Alimenté par `OddsUpdated`. Scale en lecture indépendamment. |
 
 **Ce qui NE devient PAS un service (et pourquoi c'est un choix, pas un manque) :**
@@ -232,7 +232,7 @@ extrait d'abord ce qui apporte le plus en touchant le moins au chemin argent.
   `MarketCreationPort` (vers Catalog) et `MarketSettlementPort` (vers Betting).
 - **Communication** : aujourd'hui ces ports sont des adapters in-process
   (`CatalogMarketCreation` côté Catalog, `CommandBusMarketSettlement` côté Betting).
-  À l'extraction, on remplace **l'adapter, pas le port** : `FeatureRiotMatch` et
+  À l'extraction, on remplace **l'adapter, pas le port** : `IngestMatchMarket` et
   `SyncMatchResult` continuent d'appeler `MarketCreationPort` / `MarketSettlementPort` ;
   seule l'implémentation devient un appel réseau (HTTP) ou un événement (`MatchSettled`
   via Outbox). Le domaine et l'application ne changent pas — **c'est exactement la
@@ -321,7 +321,7 @@ reste le cas **à ne pas** extraire (ADR-003).
 La thèse « monolithe modulaire ready-to-split » est **validée par le code réel**, pas
 par l'intention :
 
-- **0 arête contexte→contexte** sur 249 modules / 752 dépendances, **0 violation**
+- **0 arête contexte→contexte** sur 287 modules / 858 dépendances, **0 violation**
   des 5 règles dependency-cruiser → les frontières sont réelles et tenues en CI.
 - Les coutures de découpe (**ports shared-kernel, Outbox/BullMQ, idempotence,
   read-model, ledger**) sont **en place et exercées**, pas hypothétiques.

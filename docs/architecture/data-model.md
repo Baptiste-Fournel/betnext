@@ -4,7 +4,7 @@
 > (`src/**/infrastructure/persistence/migrations/*.ts` et `src/messaging/migrations/*.ts`), jouées au
 > démarrage (`migrationsRun: true`) quand `DATABASE_URL` est défini. Sans `DATABASE_URL`, le POC tourne
 > sur des adapters **en mémoire** iso-sémantiques (tests rapides) ; les garanties au niveau base
-> décrites ici sont prouvées sur **vrai Postgres** via `npm run test:atomicity:pg` (16 cas) et les
+> décrites ici sont prouvées sur **vrai Postgres** via `npm run test:atomicity:pg` (18 cas) et les
 > scripts Redis de la CI. Tous les extraits DDL ci-dessous sont copiés des migrations.
 
 ---
@@ -13,11 +13,11 @@
 
 | Choix | Détail | Pourquoi (gain / perte / condition) |
 | --- | --- | --- |
-| **Postgres = source de vérité** ; **Redis = cache reconstructible** | L'état et l'argent vivent en Postgres. Le read-model des cotes et l'état Pricing vivent en Redis (§7). | Gain : zéro perte d'argent garantie en base. Perte : Redis peut diverger transitoirement (cohérence éventuelle). Condition : Redis n'est **jamais** autoritatif ni utilisé pour le solde (ADR-006). |
-| **1 table = 1 bounded context propriétaire** | `bets`/`bet_events`/`outbox`/`idempotency_keys` → Betting ; `wallets`/`wallet_operations` → Wallet ; `rg_caps`/`rg_daily_stakes` → Responsible Gaming ; `processed_messages` → infra messaging. | Frontières « ready-to-split » (ADR-001) : un contexte est extractible en service sans démêler ses tables. |
+| **Postgres = source de vérité** ; **Redis = cache reconstructible** | L'état et l'argent vivent en Postgres. Le read-model des cotes et l'état Pricing vivent en Redis (§8). | Gain : zéro perte d'argent garantie en base. Perte : Redis peut diverger transitoirement (cohérence éventuelle). Condition : Redis n'est **jamais** autoritatif ni utilisé pour le solde (ADR-006). |
+| **1 table = 1 bounded context propriétaire** | `bets`/`bet_events`/`outbox`/`idempotency_keys` → Betting ; `wallets`/`wallet_operations` → Wallet ; `rg_caps`/`rg_daily_stakes` → Responsible Gaming ; `users` → Identity ; `processed_messages` → infra messaging. | Frontières « ready-to-split » (ADR-001) : un contexte est extractible en service sans démêler ses tables. |
 | **Aucune clé étrangère inter-contexte** | `userId`, `outcomeId`, `betId` sont des identifiants **logiques**, pas des `FOREIGN KEY` contraintes en base. | Gain : pas de FK distribué à casser quand Wallet/Pricing sortent en service ; la cohérence inter-contexte passe par les **events** (Outbox). Perte : pas d'intégrité référentielle DB transverse → à garantir applicativement. Condition : la couture transactionnelle (BET-5) garde l'atomicité tant que mono-DB. |
 | **Argent en `numeric(14,2)`** | `stake`, `balance`, `potentialGain`, `amount`, `dailyCap`, `staked`. **Jamais** de `float`. | Évite les erreurs d'arrondi binaire sur la monnaie (exigence « zéro erreur » du défi 3). |
-| **Horodatages `timestamptz`** (`createdAt`, `occurredAt`, …) | Stockés en UTC. | Cohérence temporelle ; voir l'hypothèse « jour UTC » du plafond (§6). |
+| **Horodatages `timestamptz`** (`createdAt`, `occurredAt`, …) | Stockés en UTC. | Cohérence temporelle ; voir l'hypothèse « jour UTC » du plafond (§7). |
 | **Migrations explicites & idempotentes** | DDL SQL écrit à la main, `CREATE ... IF NOT EXISTS`, jouées au boot. `synchronize: false`. | Schéma reproductible et auditable ; pas de drift implicite par l'ORM. |
 | **Pattern « PK = clé d'idempotence »** | La PK porte la garantie *exactement-une-fois* : `processed_messages.messageId`, `idempotency_keys.key`, `wallet_operations.opKey`, et l'index unique partiel `uniq_bet_settlement_event`. | Un 2e enregistrement (rejeu / concurrence) viole la PK/l'unique → annulé par la base, pas par du code applicatif faillible. |
 
@@ -85,6 +85,13 @@ erDiagram
     varchar userId PK
     varchar day PK
     numeric staked
+  }
+  users {
+    varchar id PK
+    varchar username "unique"
+    varchar passwordHash
+    varchar role "PLAYER / MANAGER"
+    timestamptz createdAt
   }
 ```
 
@@ -213,7 +220,7 @@ n'est publié (fenêtre de perte fermée).
   perte ; rejeu si le process meurt entre l'enqueue et le marquage).
 - **Index PARTIEL** `idx_outbox_unpublished` (`WHERE publishedAt IS NULL`) : le relais ne scanne que le
   backlog non publié, qui reste petit même si la table grossit. Gain : poll O(backlog) ; condition :
-  les lignes publiées restent (pas de purge ici — dette §8).
+  les lignes publiées restent (pas de purge ici — dette §9).
 - `id` `uuid` : sert de `jobId` BullMQ (dé-doublonnage borné côté file) ; le garant **pérenne** reste
   `processed_messages` côté consommateur (§4).
 
@@ -245,7 +252,7 @@ CREATE TABLE IF NOT EXISTS "wallet_operations" (
   "opKey" varchar PRIMARY KEY,
   "userId" varchar NOT NULL,
   "amount" numeric(14,2) NOT NULL,   -- montant SIGNÉ : débit < 0, crédit/ouverture > 0
-  "kind" varchar NOT NULL,           -- OPENING | DEBIT | CREDIT
+  "kind" varchar NOT NULL,           -- OPENING | DEBIT | CREDIT | REFUND
   "createdAt" timestamptz NOT NULL DEFAULT now()
 );
 ```
@@ -342,7 +349,33 @@ port partagé `StakeGuardPort`, sans accès à ces tables).
 
 ---
 
-## 6. Récapitulatif des garde-fous **au niveau base**
+## 6. Contexte **Identity** (auth + RBAC — BET-20)
+
+```sql
+CREATE TABLE IF NOT EXISTS "users" (
+  "id" varchar PRIMARY KEY,
+  "username" varchar NOT NULL,
+  "passwordHash" varchar NOT NULL,
+  "role" varchar NOT NULL,
+  "createdAt" timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "uniq_users_username" ON "users" ("username");
+```
+
+**Rôle** : comptes et rôles (`PLAYER` / `MANAGER`), **possédés par Identity**. Les autres contextes ne
+lisent jamais cette table : ils reçoivent l'identité **vérifiée** (userId + rôle) via le port partagé
+`TokenVerifierPort` (JWT signé) — jamais le `userId` du corps de requête (anti-IDOR, ADR-015).
+
+**Choix de conception**
+- `passwordHash` uniquement (jamais de mot de passe en clair) ; `username` **unique** (index dédié).
+- `role` = `varchar` côté base, contraint par l'enum applicatif `Role` (extensible sans migration).
+- Aucune **FK** vers `users` depuis les autres tables : `userId` reste un identifiant **logique**
+  (frontières « ready-to-split », §1).
+
+---
+
+## 7. Récapitulatif des garde-fous **au niveau base**
 
 | Garde-fou (objet DB) | Table | Garantit | Contrainte / défi |
 | --- | --- | --- | --- |
@@ -358,7 +391,7 @@ port partagé `StakeGuardPort`, sans accès à ces tables).
 
 ---
 
-## 7. Stores **Redis** (non-relationnels, reconstructibles — ADR-006)
+## 8. Stores **Redis** (non-relationnels, reconstructibles — ADR-006)
 
 Hors schéma relationnel : Redis n'est **jamais** autoritatif ni utilisé pour l'argent.
 
@@ -376,7 +409,7 @@ Hors schéma relationnel : Redis n'est **jamais** autoritatif ni utilisé pour l
 
 ---
 
-## 8. Compromis & dette assumée (tracés)
+## 9. Compromis & dette assumée (tracés)
 
 - **Aucune FK inter-contexte** — *gain* : extraction d'un service sans FK distribué ; *perte* :
   intégrité référentielle non garantie par la base (à tenir applicativement / par events) ; *condition* :

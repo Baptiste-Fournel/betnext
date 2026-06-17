@@ -312,7 +312,7 @@ afficher ≠ figer → faille money-safety ; rejeté au profit d'une source uniq
 `src/contexts/betting/infrastructure/CommandBusMarketSettlement.ts`,
 `src/contexts/game-integration/application/SyncMatchResult.ts`,
 `src/shared-kernel/domain/OpeningOdds.ts`. ACL + résilience : feed esports
-`src/contexts/game-integration/infrastructure/esports/` ; résultat `.../infrastructure/riot/`.
+`src/contexts/game-integration/infrastructure/esports/` ; résultat `.../infrastructure/esports/EsportsResultProvider.ts`.
 
 ---
 

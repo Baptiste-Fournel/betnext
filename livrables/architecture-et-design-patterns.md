@@ -26,7 +26,7 @@ rôle) consomment l'API via un **contrat OpenAPI généré** ; l'infra se résum
 
 | Élément | Réalité du POC |
 |---|---|
-| **8 contextes bornés** | Identity · Wallet · Compliance · Catalog · Betting · Pricing · Game Integration · **Shared Kernel** |
+| **7 contextes métier + Shared Kernel** | Identity · Wallet · Compliance · Catalog · Betting · Pricing · Game Integration · **Shared Kernel** |
 | **Module extrait** | **Pricing** (`src/pricing.main.ts`, lancé par `npm run start:pricing`) — preuve « ready-to-split » |
 | **2 fronts** | Joueur (`web/apps/player`, :3001) · Admin/gestionnaire (`web/apps/admin`, :3002) |
 | **Contrat d'API** | OpenAPI généré (`npm run openapi:generate`) → types front (`packages/api-contract`, `npm run api:contract`) |

@@ -18,7 +18,7 @@ d'architecte : chaque choix est justifié et chaque compromis assumé.
   `betting`, `pricing`, `game-integration`) + un **Shared Kernel** (`src/shared-kernel/`,
   types purs + **ports** inter-contextes).
 - **Frontières dures vérifiées au build** (`dependency-cruiser`, 5 règles) : un import inter-contexte
-  casse la CI (`npm run boundaries` → *0 violation* sur 249 modules, BET-26).
+  casse la CI (`npm run boundaries` → *0 violation* sur 287 modules, BET-26).
 - **Hexagonal** : la couche `domain` ne dépend ni de `application`, ni de `infrastructure`,
   ni d'un framework. Les use cases dépendent de **ports** (interfaces), pas d'adapters.
   Coutures inter-contextes via ports du Shared Kernel : `WalletDebitPort`/`WalletCreditPort`,
@@ -484,8 +484,8 @@ correction), **idempotence** (rejeu = rapport identique, 0 écriture), **multi-w
 rapporté). Non-régression money-safety : `npm run test:atomicity:pg` (18 cas, débit désormais journalisé).
 
 > **Limites (tracées)** : pas d'**alerting** ni de workflow de correction (action manuelle) ; ouverture
-> **unique** par wallet (pas de dépôts multiples) et `POST /wallet/open` **sans auth** (comme tout le
-> POC, à durcir avec Identity) ; purge de `wallet_operations` à faire **sans casser l'invariant**
+> **unique** par wallet (pas de dépôts multiples) ; `POST /wallet/open` est réservé au rôle
+> `MANAGER` depuis BET-20 ; purge de `wallet_operations` à faire **sans casser l'invariant**
 > (snapshot de solde requis).
 
 ## Postgres par défaut + Catalog persistant (BET-19)

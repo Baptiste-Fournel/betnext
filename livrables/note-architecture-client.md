@@ -83,17 +83,18 @@ ajoute un petit module de règlement dédié, **sans toucher** au reste. (Le dé
 
 ## Ce qui est déjà en place vs à venir (transparence)
 
-**Déjà en place et démontré** : pose de pari rapide et sûre, cotes en direct et figées, règlement
-(gagné / perdu / annulé), portefeuille avec contrôle de cohérence, historique, plafond quotidien (jeu
-responsable), interface web des parcours joueur et gestionnaire.
+**Déjà en place et démontré** : gestion des comptes / connexion (authentification + rôles), pose de
+pari rapide et sûre, cotes en direct et figées, règlement (gagné / perdu / annulé), portefeuille avec
+contrôle de cohérence, historique, plafond quotidien (jeu responsable), **connexion à un fournisseur de
+matchs** (feed LoL Esports : événements à venir + résultats, avec règlement automatique), **dépôt par
+carte** (prestataire Stripe), interface web des parcours joueur et gestionnaire.
 
-**Conçu, prévu pour plus tard** (non encore activé) :
+**Conçu, prévu pour plus tard** (à durcir avant la production) :
 
-- la **connexion automatique à un fournisseur de matchs** (récupérer événements et résultats d'un
-  service externe type Riot/LoL Esports) — l'ossature est prête à l'accueillir ;
-- le **paiement par carte** (prestataire externe) — aujourd'hui le portefeuille fonctionne en mode
-  démonstration ;
-- la **gestion des comptes / connexion** (authentification) — à brancher.
+- le **dépôt par carte** tourne aujourd'hui par défaut en mode démonstration (prestataire simulé) ; la
+  vraie passerelle Stripe (mode test) s'active avec une clé ;
+- la **connexion au fournisseur de matchs** tourne par défaut sur des données de démonstration
+  (fixtures) ; le flux externe réel s'active avec son URL d'API.
 
 ---
 
@@ -102,4 +103,4 @@ responsable), interface web des parcours joueur et gestionnaire.
 La refonte ne change pas *ce que fait* la plateforme — elle change **comment elle le fait** : plus
 **rapide** quand il y a du monde, **ouverte** à de nouveaux jeux et formats, et **sûre sur l'argent**,
 avec un historique complet. Les fondations sont posées pour que les prochaines fonctionnalités
-(fournisseurs de matchs, paiement, comptes) s'ajoutent **sans tout reconstruire**.
+(nouveaux jeux, nouveaux types de paris, montée en charge) s'ajoutent **sans tout reconstruire**.
