@@ -605,6 +605,73 @@
         ]
       }
     },
+    "/game-integration/featured": {
+      "post": {
+        "operationId": "GameIntegrationController_feature",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeatureRiotMatchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Match Riot mis en avant : marché créé + lien match↔marché (one-step)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeaturedMatchDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide (name/game/matchId/outcomes)"
+          },
+          "401": {
+            "description": "Token Bearer requis/invalide"
+          },
+          "403": {
+            "description": "Réservé au rôle MANAGER"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "game-integration"
+        ]
+      },
+      "get": {
+        "operationId": "FeaturedMatchesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Matchs Riot mis en avant (matchId, région, marketId, mapping) — PUBLIC",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FeaturedMatchDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "game-integration"
+        ]
+      }
+    },
     "/game-integration/matches": {
       "post": {
         "operationId": "GameIntegrationController_link",
@@ -1265,6 +1332,113 @@
         "required": [
           "userId",
           "role"
+        ]
+      },
+      "FeaturedOutcomeInputDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "example": "Victoire Blue side"
+          },
+          "side": {
+            "type": "string",
+            "example": "HOME",
+            "enum": [
+              "HOME",
+              "AWAY",
+              "DRAW"
+            ]
+          }
+        },
+        "required": [
+          "label",
+          "side"
+        ]
+      },
+      "FeatureRiotMatchRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Riot Featured — Blue vs Red"
+          },
+          "game": {
+            "type": "string",
+            "example": "LoL"
+          },
+          "matchId": {
+            "type": "string",
+            "example": "EUW1_7437325115"
+          },
+          "region": {
+            "type": "string",
+            "example": "EUW",
+            "description": "région (métadonnée ; routing europe)"
+          },
+          "outcomes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeaturedOutcomeInputDto"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "game",
+          "matchId",
+          "outcomes"
+        ]
+      },
+      "FeaturedSideMappingDto": {
+        "type": "object",
+        "properties": {
+          "HOME": {
+            "type": "string",
+            "example": "mkt-featured-euw1-7437325115-1"
+          },
+          "AWAY": {
+            "type": "string",
+            "example": "mkt-featured-euw1-7437325115-2"
+          },
+          "DRAW": {
+            "type": "string",
+            "example": "mkt-featured-euw1-7437325115-3"
+          }
+        }
+      },
+      "FeaturedMatchDto": {
+        "type": "object",
+        "properties": {
+          "matchId": {
+            "type": "string",
+            "example": "EUW1_7437325115"
+          },
+          "marketId": {
+            "type": "string",
+            "example": "mkt-featured-euw1-7437325115"
+          },
+          "region": {
+            "type": "string",
+            "example": "EUW",
+            "nullable": true
+          },
+          "outcomes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/FeaturedSideMappingDto"
+          }
+        },
+        "required": [
+          "matchId",
+          "marketId",
+          "region",
+          "outcomes",
+          "mapping"
         ]
       },
       "OutcomeMappingDto": {

@@ -11,6 +11,7 @@ import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiBody,
+  ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiOkResponse,
   ApiParam,
@@ -21,6 +22,12 @@ import {
 } from '@nestjs/swagger';
 import { RegisterMatchLink } from '../../application/RegisterMatchLink';
 import { SyncMatchResult, SyncResult } from '../../application/SyncMatchResult';
+import {
+  FeatureRiotMatch,
+  FeaturedMatch,
+  FeaturedOutcomeInput,
+} from '../../application/FeatureRiotMatch';
+import { FeatureRiotMatchRequest, FeaturedMatchDto } from './featured.dto';
 import { MatchLink } from '../../application/ports/MatchLinkStore';
 import { MatchOutcomeSide } from '../../domain/MatchReport';
 import { JwtAuthGuard } from '../../../../shared/auth/jwt-auth.guard';
@@ -85,6 +92,14 @@ interface RegisterBody {
   mapping?: unknown;
 }
 
+interface FeatureBody {
+  name?: unknown;
+  game?: unknown;
+  matchId?: unknown;
+  region?: unknown;
+  outcomes?: unknown;
+}
+
 @ApiTags('game-integration')
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({ description: 'Token Bearer requis/invalide' })
@@ -96,7 +111,30 @@ export class GameIntegrationController {
   constructor(
     private readonly registerMatchLink: RegisterMatchLink,
     private readonly syncMatchResult: SyncMatchResult,
+    private readonly featureRiotMatch: FeatureRiotMatch,
   ) {}
+
+  @Post('featured')
+  @HttpCode(201)
+  @ApiBody({ type: FeatureRiotMatchRequest })
+  @ApiCreatedResponse({
+    type: FeaturedMatchDto,
+    description: 'Match Riot mis en avant : marché créé + lien match↔marché (one-step)',
+  })
+  @ApiBadRequestResponse({ description: 'Corps invalide (name/game/matchId/outcomes)' })
+  feature(@Body() body: FeatureBody): Promise<FeaturedMatch> {
+    const name = typeof body.name === 'string' ? body.name : '';
+    const game = typeof body.game === 'string' ? body.game : '';
+    const matchId = typeof body.matchId === 'string' ? body.matchId : '';
+    const region = typeof body.region === 'string' ? body.region : undefined;
+    const outcomes = this.parseFeaturedOutcomes(body.outcomes);
+    if (!name.trim() || !game.trim() || !matchId.trim() || outcomes === null) {
+      throw new BadRequestException(
+        'name, game, matchId (string) et outcomes ([{label, side}]) requis',
+      );
+    }
+    return this.featureRiotMatch.execute({ name, game, matchId, region, outcomes });
+  }
 
   @Post('matches')
   @HttpCode(200)
@@ -122,6 +160,24 @@ export class GameIntegrationController {
   @ApiOkResponse({ type: SyncResultDto, description: 'Résultat synchronisé (réglé si match fini)' })
   sync(@Param('matchId') matchId: string): Promise<SyncResult> {
     return this.syncMatchResult.execute(matchId);
+  }
+
+  private parseFeaturedOutcomes(raw: unknown): FeaturedOutcomeInput[] | null {
+    if (!Array.isArray(raw)) {
+      return null;
+    }
+    const outcomes: FeaturedOutcomeInput[] = [];
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+      const candidate = item as Record<string, unknown>;
+      if (typeof candidate.label !== 'string' || typeof candidate.side !== 'string') {
+        return null;
+      }
+      outcomes.push({ label: candidate.label, side: candidate.side as MatchOutcomeSide });
+    }
+    return outcomes;
   }
 
   private parseMapping(raw: unknown): Partial<Record<MatchOutcomeSide, string>> {

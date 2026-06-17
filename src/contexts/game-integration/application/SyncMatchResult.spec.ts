@@ -16,6 +16,7 @@ const link: MatchLink = {
 const linkStore = (l: MatchLink | null): MatchLinkStore => ({
   save: async () => undefined,
   find: async () => l,
+  list: async () => (l ? [l] : []),
 });
 const provider = (report: MatchReport): GameProvider => ({
   fetchMatchReport: async () => report,

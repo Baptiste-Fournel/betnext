@@ -10,4 +10,8 @@ export class InMemoryMatchLinkStore implements MatchLinkStore {
   async find(matchId: string): Promise<MatchLink | null> {
     return this.links.get(matchId) ?? null;
   }
+
+  async list(): Promise<MatchLink[]> {
+    return [...this.links.values()];
+  }
 }

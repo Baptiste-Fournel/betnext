@@ -51,6 +51,7 @@ export function PlayerView(): React.JSX.Element {
   const userId = user?.userId ?? '';
   const [markets, setMarkets] = useState<Market[] | null>(null);
   const [marketsError, setMarketsError] = useState(false);
+  const [featuredMarketIds, setFeaturedMarketIds] = useState<Set<string>>(new Set());
   const [odds, setOdds] = useState<Record<string, OddsState | null>>({});
   const [live, setLive] = useState<LiveState>('connecting');
   const [selected, setSelected] = useState<Selection | null>(null);
@@ -66,6 +67,12 @@ export function PlayerView(): React.JSX.Element {
         return;
       }
       setMarkets(data);
+      try {
+        const { data: featured } = await api.GET('/game-integration/featured');
+        if (featured) setFeaturedMarketIds(new Set(featured.map((f) => f.marketId)));
+      } catch {
+        // listing featured non bloquant : le badge est purement informatif
+      }
       const entries = await Promise.all(
         data
           .flatMap((m) => m.outcomes)
@@ -168,8 +175,11 @@ export function PlayerView(): React.JSX.Element {
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <CardTitle className="text-base">{market.name}</CardTitle>
-                      <CardDescription className="mt-1">
+                      <CardDescription className="mt-1 flex flex-wrap gap-1.5">
                         <Badge variant="outline">{market.game}</Badge>
+                        {featuredMarketIds.has(market.id) && (
+                          <Badge variant="secondary">Featured · Riot</Badge>
+                        )}
                       </CardDescription>
                     </div>
                     <Badge variant="success">Ouvert</Badge>

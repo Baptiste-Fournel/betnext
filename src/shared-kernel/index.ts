@@ -10,3 +10,10 @@ export { WALLET_CREDIT_PORT } from './ports/WalletCreditPort';
 export type { WalletCreditPort } from './ports/WalletCreditPort';
 export { STAKE_GUARD_PORT } from './ports/StakeGuardPort';
 export type { StakeGuardPort } from './ports/StakeGuardPort';
+export { MARKET_CREATION_PORT } from './ports/MarketCreationPort';
+export type {
+  MarketCreationPort,
+  MarketCreationRequest,
+  CreatedMarket,
+  CreatedMarketOutcome,
+} from './ports/MarketCreationPort';

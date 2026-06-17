@@ -228,6 +228,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/game-integration/featured": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["FeaturedMatchesController_list"];
+        put?: never;
+        post: operations["GameIntegrationController_feature"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/game-integration/matches": {
         parameters: {
             query?: never;
@@ -505,6 +521,47 @@ export interface components {
             userId: string;
             /** @example PLAYER */
             role: string;
+        };
+        FeaturedOutcomeInputDto: {
+            /** @example Victoire Blue side */
+            label: string;
+            /**
+             * @example HOME
+             * @enum {string}
+             */
+            side: "HOME" | "AWAY" | "DRAW";
+        };
+        FeatureRiotMatchRequest: {
+            /** @example Riot Featured — Blue vs Red */
+            name: string;
+            /** @example LoL */
+            game: string;
+            /** @example EUW1_7437325115 */
+            matchId: string;
+            /**
+             * @description région (métadonnée ; routing europe)
+             * @example EUW
+             */
+            region?: string;
+            outcomes: components["schemas"]["FeaturedOutcomeInputDto"][];
+        };
+        FeaturedSideMappingDto: {
+            /** @example mkt-featured-euw1-7437325115-1 */
+            HOME?: string;
+            /** @example mkt-featured-euw1-7437325115-2 */
+            AWAY?: string;
+            /** @example mkt-featured-euw1-7437325115-3 */
+            DRAW?: string;
+        };
+        FeaturedMatchDto: {
+            /** @example EUW1_7437325115 */
+            matchId: string;
+            /** @example mkt-featured-euw1-7437325115 */
+            marketId: string;
+            /** @example EUW */
+            region: string | null;
+            outcomes: string[];
+            mapping: components["schemas"]["FeaturedSideMappingDto"];
         };
         OutcomeMappingDto: {
             /**
@@ -1132,6 +1189,71 @@ export interface operations {
             };
             /** @description Token Bearer requis/invalide */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FeaturedMatchesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matchs Riot mis en avant (matchId, région, marketId, mapping) — PUBLIC */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeaturedMatchDto"][];
+                };
+            };
+        };
+    };
+    GameIntegrationController_feature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeatureRiotMatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Match Riot mis en avant : marché créé + lien match↔marché (one-step) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeaturedMatchDto"];
+                };
+            };
+            /** @description Corps invalide (name/game/matchId/outcomes) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token Bearer requis/invalide */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Réservé au rôle MANAGER */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
