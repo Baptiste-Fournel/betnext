@@ -61,7 +61,11 @@ describe('FeatureRiotMatch (BET-29)', () => {
 
     // Assert — le marché est créé avec les libellés dans l'ordre fourni
     expect(markets.calls).toEqual([
-      { name: 'G2 vs FNC', game: 'LoL', outcomeLabels: ['Victoire G2', 'Victoire FNC', 'Match nul'] },
+      {
+        name: 'G2 vs FNC',
+        game: 'LoL',
+        outcomeLabels: ['Victoire G2', 'Victoire FNC', 'Match nul'],
+      },
     ]);
     // mapping côté → id d'issue généré, aligné par index
     expect(featured.mapping).toEqual({
