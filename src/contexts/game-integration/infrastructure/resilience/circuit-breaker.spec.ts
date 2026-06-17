@@ -1,6 +1,6 @@
 import { CircuitBreaker, CircuitOpenError } from './circuit-breaker';
 
-describe('CircuitBreaker (BET-21, défi 3)', () => {
+describe('CircuitBreaker (BET-21, challenge 3)', () => {
   const fail = (): Promise<never> => Promise.reject(new Error('boom'));
   const ok = (): Promise<string> => Promise.resolve('ok');
 

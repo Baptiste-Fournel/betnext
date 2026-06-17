@@ -2,7 +2,7 @@ import { OddsReadController } from './OddsReadController';
 import { InMemoryOddsReadModel } from './InMemoryOddsReadModel';
 import { OPENING_ODDS_VALUE } from '../shared-kernel/domain/OpeningOdds';
 
-describe("OddsReadController (cote courante — read-model + ligne d'ouverture)", () => {
+describe('OddsReadController (current odds — read-model + opening line)', () => {
   it('shouldReturnOpeningOddsFlaggedOpening_WhenReadModelCold', async () => {
     // Arrange
     const controller = new OddsReadController(new InMemoryOddsReadModel());

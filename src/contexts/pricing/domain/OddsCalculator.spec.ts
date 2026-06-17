@@ -1,7 +1,7 @@
 import { OddsCalculator } from './OddsCalculator';
 import { Odds } from '../../../shared-kernel/domain/Odds';
 
-describe('OddsCalculator (pari-mutuel, N-issues)', () => {
+describe('OddsCalculator (parimutuel, N-outcomes)', () => {
   const calc = new OddsCalculator();
 
   it('shouldProduceBalancedOdds_WhenStakesAreEqual', () => {

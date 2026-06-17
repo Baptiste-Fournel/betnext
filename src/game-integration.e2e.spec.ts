@@ -4,7 +4,7 @@ import request from 'supertest';
 import { AppModule } from './app.module';
 import { TOKEN_SERVICE, TokenService } from './contexts/identity/application/ports/TokenService';
 
-describe('BetNext feed matchs pro à venir (e2e, BET-30)', () => {
+describe('BetNext upcoming pro matches feed (e2e, BET-30)', () => {
   let app: INestApplication;
   let playerTok = '';
   let managerTok = '';

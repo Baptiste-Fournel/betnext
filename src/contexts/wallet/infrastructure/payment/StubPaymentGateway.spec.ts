@@ -1,6 +1,6 @@
 import { StubPaymentGateway } from './StubPaymentGateway';
 
-describe('StubPaymentGateway (BET-17) — PSP déterministe, idempotent (tests + démo sans clé)', () => {
+describe('StubPaymentGateway (BET-17) — deterministic, idempotent PSP (tests + keyless demo)', () => {
   it('shouldChargeOnceAndReturnDomainShape_WhenCharged', async () => {
     // Arrange
     const gateway = new StubPaymentGateway();

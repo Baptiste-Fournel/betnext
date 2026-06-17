@@ -1,6 +1,6 @@
 import { InMemoryOddsReadModel } from './InMemoryOddsReadModel';
 
-describe('InMemoryOddsReadModel (garde monotone anti out-of-order)', () => {
+describe('InMemoryOddsReadModel (monotonic guard against out-of-order)', () => {
   it('shouldKeepRecentOddsAndApplyNewer_WhenSnapshotsArriveOutOfOrder', async () => {
     // Arrange
     const rm = new InMemoryOddsReadModel();

@@ -37,7 +37,7 @@ class ScopedBetRepository implements BetRepository {
   }
 }
 
-describe('GetPlayerStatsHandler (read-model stats, scoping anti-IDOR)', () => {
+describe('GetPlayerStatsHandler (read-model stats, anti-IDOR scoping)', () => {
   it('shouldCountByStatus_WhenPlayerHasMixedBets', async () => {
     // Arrange
     const handler = new GetPlayerStatsHandler(

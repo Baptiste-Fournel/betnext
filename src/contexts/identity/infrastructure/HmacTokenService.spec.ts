@@ -1,6 +1,6 @@
 import { HmacTokenService } from './HmacTokenService';
 
-describe('HmacTokenService (BET-20) — token infalsifiable', () => {
+describe('HmacTokenService (BET-20) — tamper-proof token', () => {
   const svc = new HmacTokenService('test-secret-abc', 3600);
 
   it('shouldRoundTripPayloadAndExpiry_WhenSigningThenVerifying', () => {

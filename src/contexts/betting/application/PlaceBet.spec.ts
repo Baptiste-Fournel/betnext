@@ -56,7 +56,7 @@ const noopUow: UnitOfWork = {
   withTransaction: <T>(work: () => Promise<T>): Promise<T> => work(),
 };
 
-describe('PlaceBet (use case hexagonal)', () => {
+describe('PlaceBet (hexagonal use case)', () => {
   it('shouldLockOddsAndDebitWalletOnceAndPersistBet_WhenCommandExecuted', async () => {
     // Arrange
     const bets = new InMemoryBets();

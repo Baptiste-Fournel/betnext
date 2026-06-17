@@ -6,7 +6,7 @@ import { EXACT_SCORE_STRATEGY, ExactScoreStrategy } from './ExactScoreStrategy';
 const bet = (outcomeId: string): Bet =>
   Bet.place({ id: 'b1', userId: 'u1', outcomeId, stake: 20, currentOdds: Odds.of(2) });
 
-describe('ExactScoreStrategy (nouveau type de pari ajouté via la couture — BET-25)', () => {
+describe('ExactScoreStrategy (new bet type added via the seam — BET-25)', () => {
   const strategy = new ExactScoreStrategy();
 
   it('shouldExposeTheExactScoreKey_WhenRegisteredInTheFactory', () => {

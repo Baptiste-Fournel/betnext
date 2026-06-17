@@ -36,7 +36,7 @@ async function newDataSource(): Promise<DataSource> {
 const betPlaced = (outcomeId: string, stake: number, lockedOdds = 2): string =>
   JSON.stringify({ type: 'BetPlaced', aggregateId: randomUUID(), outcomeId, stake, lockedOdds });
 
-describe('Boucle async Pricing : BetPlaced → relais → recalcul → OddsUpdated (bus en mémoire, sans Redis)', () => {
+describe('Async Pricing loop: BetPlaced → relay → recompute → OddsUpdated (in-memory bus, no Redis)', () => {
   let ds: DataSource;
   beforeEach(async () => {
     ds = await newDataSource();

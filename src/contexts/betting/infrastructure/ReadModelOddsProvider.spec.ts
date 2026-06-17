@@ -2,7 +2,7 @@ import { ReadModelOddsProvider, OPENING_ODDS } from './ReadModelOddsProvider';
 import { InMemoryOddsReadModel } from '../../../read-model/InMemoryOddsReadModel';
 import { openingOdds } from '../../../shared-kernel/domain/OpeningOdds';
 
-describe('ReadModelOddsProvider (cote courante lue depuis le read-model)', () => {
+describe('ReadModelOddsProvider (current odds read from the read-model)', () => {
   it('shouldReturnOpeningOddsMarkedProvisional_WhenCacheCold', async () => {
     // Arrange
     const provider = new ReadModelOddsProvider(new InMemoryOddsReadModel());

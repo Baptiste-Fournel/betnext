@@ -1,7 +1,7 @@
 import { SportEvent } from './SportEvent';
 import { Outcome } from './Outcome';
 
-describe('SportEvent (catalogue générique N-issues)', () => {
+describe('SportEvent (generic N-outcome catalogue)', () => {
   it('shouldSupportThreeOutcomeMarketWithoutTeamABModel_WhenWinAWinBDrawAdded', () => {
     // Arrange
     const ev = new SportEvent('e1', 'T1 vs BLG', 'League of Legends')

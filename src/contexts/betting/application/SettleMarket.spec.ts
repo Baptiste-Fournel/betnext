@@ -53,7 +53,7 @@ const noopUow: UnitOfWork = { withTransaction: <T>(w: () => Promise<T>): Promise
 const placed = (id: string, userId: string, outcomeId: string): Bet =>
   Bet.place({ id, userId, outcomeId, stake: 10, currentOdds: Odds.of(2) });
 
-describe('SettleMarket (règlement W/L/V via la couture Strategy)', () => {
+describe('SettleMarket (W/L/V settlement via the Strategy seam)', () => {
   it('shouldCreditWinnerAtLockedOddsAndNotCreditLoser_WhenMarketSettled', async () => {
     // Given
     const bets = new StubBets();

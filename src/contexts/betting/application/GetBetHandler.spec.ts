@@ -37,7 +37,7 @@ const betOf = (userId: string): Bet =>
     createdAt: new Date(),
   });
 
-describe('GetBetHandler (read-your-writes, cote figée, scoping anti-IDOR)', () => {
+describe('GetBetHandler (read-your-writes, locked odds, anti-IDOR scoping)', () => {
   it('shouldReturnViewWithLockedOdds_WhenOwnerQueriesOwnBet', async () => {
     // Arrange
     const handler = new GetBetHandler(new StubBetRepository(betOf('u1')));

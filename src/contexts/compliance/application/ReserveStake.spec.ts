@@ -31,7 +31,7 @@ class FakeStore implements ComplianceStore {
   }
 }
 
-describe('ReserveStake (vérif plafond via la couture Policy, dans la tx de pose)', () => {
+describe('ReserveStake (cap check via the Policy seam, within the placement tx)', () => {
   const at = new Date('2026-06-16T10:00:00Z');
 
   it('shouldReserveAndAccumulateDailyStake_WhenUnderCap', async () => {

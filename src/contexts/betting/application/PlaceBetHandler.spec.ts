@@ -66,7 +66,7 @@ const alwaysClaims: IdempotencyStore = {
   async release(): Promise<void> {},
 };
 
-describe('PlaceBetHandler (CQRS → use case idempotent)', () => {
+describe('PlaceBetHandler (CQRS → idempotent use case)', () => {
   it('shouldLockOddsAndDebitWalletOnce_WhenCommandExecuted', async () => {
     // Arrange
     const bets = new InMemoryBets();

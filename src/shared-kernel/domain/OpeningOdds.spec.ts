@@ -1,7 +1,7 @@
 import { openingOdds, OPENING_ODDS_VALUE } from './OpeningOdds';
 import { Odds } from './Odds';
 
-describe("OpeningOdds (ligne d'ouverture — source unique cote affichée + cote figée)", () => {
+describe('OpeningOdds (opening line — single source for displayed + locked odds)', () => {
   it('shouldExposeAValidOpeningOdds_WhenMarketHasNoVolume', () => {
     // Act
     const odds = openingOdds();

@@ -15,7 +15,7 @@ import { StubPaymentGateway } from './contexts/wallet/infrastructure/payment/Stu
 //   3. Changer une règle   → compliance (BET-13) : le plafond quotidien prend effet IMMÉDIATEMENT.
 //   4. Erreur de paiement  → Saga (BET-17) : crédit aval en échec → remboursement PSP idempotent
 //                            (money-safety : jamais de charge sans crédit, jamais de double-refund).
-describe('BetNext — 4 scénarios de démonstration (e2e, BET-25)', () => {
+describe('BetNext — 4 demonstration scenarios (e2e, BET-25)', () => {
   let app: INestApplication;
   let managerTok = '';
 

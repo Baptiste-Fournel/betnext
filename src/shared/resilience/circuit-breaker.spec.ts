@@ -1,6 +1,6 @@
 import { CircuitBreaker, CircuitOpenError } from './circuit-breaker';
 
-describe('CircuitBreaker (shared, défi 3) — fail-fast sur dépendance externe en panne', () => {
+describe('CircuitBreaker (shared, challenge 3) — fail-fast on a failing external dependency', () => {
   const fail = (): Promise<never> => Promise.reject(new Error('boom'));
   const ok = (): Promise<string> => Promise.resolve('ok');
 

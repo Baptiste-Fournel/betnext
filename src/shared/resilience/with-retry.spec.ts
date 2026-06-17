@@ -2,7 +2,7 @@ import { withRetry } from './with-retry';
 
 const noSleep = (): Promise<void> => Promise.resolve();
 
-describe('withRetry (shared, défi 3)', () => {
+describe('withRetry (shared, challenge 3)', () => {
   it('shouldRetryThenSucceed_WhenTransientError', async () => {
     // Arrange
     let calls = 0;

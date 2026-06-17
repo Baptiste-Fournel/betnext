@@ -2,7 +2,7 @@ import { OddsProjectorService } from './OddsProjectorService';
 import { InMemoryOddsReadModel } from './InMemoryOddsReadModel';
 import { OddsStream, OddsLiveEvent } from './OddsStream';
 
-describe('OddsProjectorService.project (OddsUpdated → read-model + flux live ; pas de polling)', () => {
+describe('OddsProjectorService.project (OddsUpdated → read-model + live stream; no polling)', () => {
   it('shouldUpdateReadModelAndPushEachOddsToStream_WhenOddsUpdated', async () => {
     // Arrange
     const readModel = new InMemoryOddsReadModel();

@@ -18,7 +18,7 @@ const fakeFetch = (status: number, json: unknown, sink: Captured[]): FetchLike =
   };
 };
 
-describe('StripePaymentGateway (BET-17) — adapter réel (mode test), ACL anti-corruption', () => {
+describe('StripePaymentGateway (BET-17) — real adapter (test mode), anti-corruption ACL', () => {
   it('shouldMapToDomainShapeWithoutLeakingStripeFields_WhenChargeSucceeds', async () => {
     // Arrange
     const calls: Captured[] = [];

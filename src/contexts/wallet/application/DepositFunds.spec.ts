@@ -85,7 +85,7 @@ const make = (
   notifier: DepositNotificationPort,
 ): DepositFunds => new DepositFunds(payment, directUow, wallet, wallet, notifier);
 
-describe('DepositFunds (BET-17) — saga Stripe : charge → crédit → compensation, money-safe', () => {
+describe('DepositFunds (BET-17) — Stripe saga: charge → credit → compensation, money-safe', () => {
   it('shouldChargeOnceAndCreditWallet_WhenHappyPath', async () => {
     // Arrange
     const wallet = new FakeWallet(100);

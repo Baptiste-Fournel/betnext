@@ -5,7 +5,7 @@ const view = (rows: WalletLedgerRow[]): WalletLedgerView => ({
   loadLedgerVsBalance: async (): Promise<WalletLedgerRow[]> => rows,
 });
 
-describe('ReconcileWallets (BET-15) — détection de dérive, sans auto-correction', () => {
+describe('ReconcileWallets (BET-15) — drift detection, no auto-correction', () => {
   it('shouldReportBalanced_WhenEveryBalanceMatchesLedgerSum', async () => {
     // Arrange
     const ledger = view([

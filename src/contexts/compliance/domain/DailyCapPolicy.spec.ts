@@ -1,7 +1,7 @@
 import { DailyCapPolicy } from './DailyCapPolicy';
 import { DailyCapExceededError } from './DailyCapExceededError';
 
-describe('DailyCapPolicy (1re règle de jeu responsable)', () => {
+describe('DailyCapPolicy (first responsible-gaming rule)', () => {
   const policy = new DailyCapPolicy();
   const snap = (stake: number, dayTotalStaked: number, dailyCap: number | null) => ({
     userId: 'u1',

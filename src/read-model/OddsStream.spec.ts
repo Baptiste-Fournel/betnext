@@ -1,6 +1,6 @@
 import { OddsStream } from './OddsStream';
 
-describe('OddsStream (flux in-process des cotes)', () => {
+describe('OddsStream (in-process odds stream)', () => {
   it('shouldPublishOddsToSubscriber_WhenOddsPublished', () => {
     // Arrange
     const stream = new OddsStream();

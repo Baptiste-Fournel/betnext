@@ -5,7 +5,7 @@ import { WinningOutcomeStrategy } from './WinningOutcomeStrategy';
 const bet = (outcomeId: string): Bet =>
   Bet.place({ id: 'b1', userId: 'u1', outcomeId, stake: 20, currentOdds: Odds.of(2) });
 
-describe('WinningOutcomeStrategy (1re vraie stratégie de règlement)', () => {
+describe('WinningOutcomeStrategy (first real settlement strategy)', () => {
   const strategy = new WinningOutcomeStrategy();
 
   it('shouldDecideWonPaidAtLockedOdds_WhenOutcomeWins', () => {

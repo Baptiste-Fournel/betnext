@@ -10,7 +10,7 @@ const base = () => ({
   currentOdds: Odds.of(2),
 });
 
-describe('Bet (agrégat)', () => {
+describe('Bet (aggregate)', () => {
   it('shouldKeepLockedOdds_WhenMarketMovesAfterPlacement', () => {
     // Arrange
     const bet = Bet.place(base());

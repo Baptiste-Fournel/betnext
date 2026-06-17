@@ -1,7 +1,7 @@
 import { InMemoryWalletAdapter } from './InMemoryWalletAdapter';
 import { ReconcileWallets } from '../application/ReconcileWallets';
 
-describe('InMemoryWalletAdapter — ledger complet (BET-15), miroir de Postgres', () => {
+describe('InMemoryWalletAdapter — full ledger (BET-15), Postgres mirror', () => {
   it('shouldKeepLedgerSumEqualToBalance_WhenOpenDebitCredit', async () => {
     // Arrange
     const w = new InMemoryWalletAdapter(0);

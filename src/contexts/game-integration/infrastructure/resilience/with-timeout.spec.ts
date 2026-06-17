@@ -1,6 +1,6 @@
 import { TimeoutError, withTimeout } from './with-timeout';
 
-describe('withTimeout (BET-21, défi 3)', () => {
+describe('withTimeout (BET-21, challenge 3)', () => {
   it('shouldResolve_WhenFunctionRespondsInTime', async () => {
     // Act / Assert
     await expect(withTimeout(() => Promise.resolve(42), 50)).resolves.toBe(42);

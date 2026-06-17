@@ -45,7 +45,7 @@ const fetchReturning = (
       json: async () => body,
     }) as Response) as unknown as typeof fetch;
 
-describe('LolEsportsScheduleProvider — ACL LoL Esports → domaine (BET-30)', () => {
+describe('LolEsportsScheduleProvider — LoL Esports ACL → domain (BET-30)', () => {
   afterEach(() => {
     jest.restoreAllMocks();
   });

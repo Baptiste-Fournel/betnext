@@ -63,7 +63,7 @@ function routesOf(controller: Type): RouteInfo[] {
     });
 }
 
-describe('Couverture des guards (BET-20)', () => {
+describe('Guards coverage (BET-20)', () => {
   const routes = CONTROLLERS.flatMap(routesOf);
 
   it('shouldDiscoverAllRoutes_WhenInspectingControllers', () => {

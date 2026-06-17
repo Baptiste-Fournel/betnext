@@ -25,7 +25,7 @@ class RecordingPublisher implements OddsPublisher {
   }
 }
 
-describe('RecalculateOddsOnBetPlaced (recalcul async hors chemin d écriture)', () => {
+describe('RecalculateOddsOnBetPlaced (async recompute off the write path)', () => {
   it('shouldAccumulateTotalsAndPublishBoundedPariMutuelOdds_WhenBetPlaced', async () => {
     // Arrange
     const publisher = new RecordingPublisher();

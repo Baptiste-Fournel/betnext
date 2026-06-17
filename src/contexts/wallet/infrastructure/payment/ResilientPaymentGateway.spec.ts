@@ -28,7 +28,7 @@ class CountingGateway implements PaymentGateway {
   }
 }
 
-describe('ResilientPaymentGateway (BET-17) — durcissement des appels PSP (défi 3)', () => {
+describe('ResilientPaymentGateway (BET-17) — PSP call hardening (challenge 3)', () => {
   it('shouldOpenCircuitAndFailFast_WhenStripeKeepsFailing', async () => {
     // Arrange
     const inner = new CountingGateway('down');

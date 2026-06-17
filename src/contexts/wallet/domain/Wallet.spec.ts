@@ -1,6 +1,6 @@
 import { Wallet } from './Wallet';
 
-describe('Wallet — idempotence (zéro double-débit / double-crédit)', () => {
+describe('Wallet — idempotency (no double-debit / double-credit)', () => {
   it('shouldApplyDebitOnce_WhenSameOperationDeliveredTwice', () => {
     // Arrange
     const wallet = new Wallet(100);
