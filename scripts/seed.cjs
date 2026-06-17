@@ -4,6 +4,10 @@ const { scryptSync, randomBytes } = require('node:crypto');
 
 const DEMO_OPENING = 100;
 const DEMO_MARKET_ID = 'mkt-demo-lol';
+// Marché « cible de règlement » : reste OUVERT après le seed pur SQL ; c'est l'enrichissement
+// runtime (scripts/demo-enrich.cjs) qui y pose un pari puis le règle → un pari GAGNÉ + des stats
+// non vides, sans bricoler l'event-sourcing/le ledger à la main.
+const DEMO_SETTLED_MARKET_ID = 'mkt-demo-settled';
 const DEMO_PASSWORD = 'changeme123';
 const ACCOUNTS = [
   { id: 'demo-player', username: 'demo-player', role: 'PLAYER' },
@@ -43,16 +47,34 @@ async function runSeed(dataSource) {
     'INSERT INTO markets ("id", "name", "game", "outcomes") VALUES ($1, $2, $3, $4::jsonb) ON CONFLICT ("id") DO NOTHING',
     [DEMO_MARKET_ID, 'BetNext Major — Team A vs Team B', 'LoL', JSON.stringify(outcomes)],
   );
-  // Les marchés des matchs pro à venir ne sont PAS seedés : ils sont créés à la demande par
-  // l'ingestion du feed LoL Esports (BET-30, POST /game-integration/esports/ingest).
+  const settledOutcomes = [
+    { id: `${DEMO_SETTLED_MARKET_ID}-1`, label: 'Victoire G2 Esports' },
+    { id: `${DEMO_SETTLED_MARKET_ID}-2`, label: 'Victoire Fnatic' },
+    { id: `${DEMO_SETTLED_MARKET_ID}-3`, label: 'Match nul' },
+  ];
+  await dataSource.query(
+    'INSERT INTO markets ("id", "name", "game", "outcomes") VALUES ($1, $2, $3, $4::jsonb) ON CONFLICT ("id") DO NOTHING',
+    [DEMO_SETTLED_MARKET_ID, 'LEC — G2 vs Fnatic (clôturé)', 'LoL', JSON.stringify(settledOutcomes)],
+  );
+  // Les marchés des matchs pro à venir ne sont PAS seedés en SQL : ils sont créés à la demande par
+  // l'ingestion du feed LoL Esports (BET-30, POST /game-integration/esports/ingest), déclenchée
+  // par scripts/demo-enrich.cjs au démarrage de la stack de démo.
   return {
     accounts: ACCOUNTS.map((a) => a.username),
     opening: DEMO_OPENING,
     marketId: DEMO_MARKET_ID,
+    settledMarketId: DEMO_SETTLED_MARKET_ID,
   };
 }
 
-module.exports = { runSeed, ACCOUNTS, DEMO_OPENING, DEMO_MARKET_ID, DEMO_PASSWORD };
+module.exports = {
+  runSeed,
+  ACCOUNTS,
+  DEMO_OPENING,
+  DEMO_MARKET_ID,
+  DEMO_SETTLED_MARKET_ID,
+  DEMO_PASSWORD,
+};
 
 if (require.main === module) {
   (async () => {

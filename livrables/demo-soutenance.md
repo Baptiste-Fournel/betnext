@@ -17,6 +17,22 @@
 
 ## 0. Préparation (avant la soutenance)
 
+**Le plus simple — toute la stack en une commande (BET-9) :**
+
+```bash
+npm run demo:reset     # table rase + seed reproductible (état propre garanti)
+npm run demo:up        # infra + back :3000 + worker + fronts :3001/:3002 (health-checks, détaché)
+                       #   ingère aussi le feed et pré-règle un pari → stats non vides d'entrée
+# … soutenance …
+npm run demo:down      # arrêt ciblé (PID/port). DOWN_INFRA=1 pour couper aussi PG/Redis.
+```
+
+`demo:up` mentionne en sortie les URLs + comptes ; logs sous `.demo/`. Le **scheduler auto**
+(BET-33) garde le feed vivant ; **Stripe** est stub sans clé, réel (test) avec `sk_test_…` ; sans
+`ESPORTS_API_BASE_URL`, le feed tourne sur **fixtures** (un match terminé → règlement auto démo-able).
+
+<details><summary>Lancement manuel équivalent (si besoin de dérouler étape par étape)</summary>
+
 ```bash
 # Back (Postgres + AUTH_SECRET requis — cf. README « Commandes »)
 npm run db:up                              # Postgres via docker compose
@@ -29,6 +45,12 @@ cd web && npm install
 npm run dev:player     # http://localhost:3001  (login demo-player  / changeme123)
 npm run dev:admin      # http://localhost:3002  (login demo-manager / changeme123)
 ```
+
+</details>
+
+**Captures de secours** (si la démo live casse) : screenshots nets des parcours clés dans
+[`captures-demo/`](captures-demo/README.md) — connexion, feed, coupon (cote figée), stats, wallet,
+admin créer/régler, synchro résultats → pari Gagné.
 
 **Comptes seed** (mot de passe `changeme123`) :
 

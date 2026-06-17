@@ -97,6 +97,44 @@ npm run test:pricing:redis       # Pricing bus-only : outbox→relais→bus→Od
 npm run test:readmodel:redis     # read-model : OddsUpdated→projecteur→lecture
 ```
 
+## Lancer la démo — toute la stack en une commande (BET-9)
+
+Le multi-process (back + worker + 2 fronts + infra) est fragile à lancer à la main pour une
+soutenance. `scripts/demo-up.sh` monte **tout** de façon fiable (health-checks, détaché, logs +
+PID sous `.demo/`), et `scripts/demo-down.sh` arrête **proprement et par cible** (PID puis port —
+jamais de `pkill` large).
+
+```bash
+npm run demo:up        # infra (PG+Redis) → build → migrations+seed → back :3000 → worker → fronts
+                       #   joueur :3001 · admin :3002 · API :3000 (Swagger /docs)
+                       #   + ingère le feed et pré-règle un pari (stats non vides) — idempotent
+npm run demo:down      # stoppe back + worker + fronts (laisse PG/Redis up). DOWN_INFRA=1 pour tout couper.
+npm run demo:reset     # table rase + seed reproductible (à lancer juste avant la soutenance)
+```
+
+Comptes (mot de passe `changeme123`) : **`demo-player`** (PLAYER) et **`demo-manager`** (MANAGER).
+
+**Scheduler auto (BET-33).** En mode live, le rafraîchissement auto du feed suit `.env`
+(`ESPORTS_SCHEDULER_ENABLED`) : l'app reste « vivante » (ré-ingestion + synchro résultats
+périodiques) sans clic.
+
+**Mode Stripe (BET-17).** Sans `STRIPE_SECRET_KEY` → **PSP stub** déterministe (le dépôt crédite
+directement, démo hors-ligne). Avec une clé `sk_test_…` → **Stripe réel (mode test)**, durci par
+circuit breaker + timeout/retry. Idem feed esports : sans `ESPORTS_API_BASE_URL`, **fixtures**
+déterministes (un match déjà terminé pour prouver le règlement auto).
+
+**Variantes / instance isolée** (smoke, captures — ne touche ni `:3000` ni l'infra live) :
+
+```bash
+DEMO_ISOLATED=1 PG_PORT=55440 scripts/demo-up.sh     # ports 3300/3301/3302, PG dédié, sans Redis,
+                                                     #   creds externes neutralisés (100 % hors-ligne)
+DEMO_ISOLATED=1 PG_PORT=55440 DOWN_INFRA=1 PURGE_VOLUME=1 scripts/demo-down.sh
+```
+
+**Filet de secours.** Captures de secours des parcours clés dans
+[`livrables/captures-demo/`](livrables/captures-demo/README.md) ; runbook + tests e2e dans
+[`livrables/demo-soutenance.md`](livrables/demo-soutenance.md).
+
 ## API HTTP (BET-11, BET-20)
 
 Lancer l'API en local : voir le bloc **Commandes** ci-dessus (Postgres + `AUTH_SECRET`

@@ -6,13 +6,25 @@ services:
       POSTGRES_PASSWORD: betnext
       POSTGRES_DB: betnext
     ports:
-      - '5432:5432'
+      # Port hôte paramétrable (défaut 5432). La démo isolée (scripts/demo-up.sh
+      # DEMO_ISOLATED=1) le décale pour ne pas toucher l'infra live.
+      - '${PG_PORT:-5432}:5432'
     volumes:
       - betnext_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U betnext -d betnext']
+      interval: 2s
+      timeout: 3s
+      retries: 30
   redis:
     image: redis:7-alpine
     ports:
-      - '6379:6379'
+      - '${REDIS_PORT:-6379}:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+      timeout: 3s
+      retries: 30
 
 volumes:
   betnext_pg:
