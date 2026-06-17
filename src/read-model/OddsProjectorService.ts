@@ -16,12 +16,6 @@ interface OddsUpdatedPayload {
   updates: OddsLiveEvent[];
 }
 
-/**
- * Projection câblée au BOOT : consomme OddsUpdated (file odds, publiée par Pricing), met à jour le
- * read-model (garde monotone, FIFO) PUIS pousse chaque cote sur le flux live (SSE — incrément 3).
- * Le flux SSE est donc alimenté par le VRAI event OddsUpdated, pas par du polling. Actif si
- * REDIS_URL ; sinon inerte (les tests appellent `project()` directement).
- */
 @Injectable()
 export class OddsProjectorService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(OddsProjectorService.name);
@@ -32,7 +26,6 @@ export class OddsProjectorService implements OnApplicationBootstrap, OnModuleDes
     private readonly stream: OddsStream,
   ) {}
 
-  /** Cœur testable : OddsUpdated → read-model + flux live (mêmes données, une seule source). */
   async project(payload: OddsUpdatedPayload): Promise<void> {
     if (payload.type !== 'OddsUpdated') {
       return;

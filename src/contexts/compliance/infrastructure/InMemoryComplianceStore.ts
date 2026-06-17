@@ -1,6 +1,5 @@
 import { ComplianceStore, DailyReservation } from '../application/ports/ComplianceStore';
 
-/** Adapter en mémoire (mode sans DATABASE_URL / tests). La course réelle est prouvée sur Postgres. */
 export class InMemoryComplianceStore implements ComplianceStore {
   private readonly caps = new Map<string, number>();
   private readonly stakes = new Map<string, number>();

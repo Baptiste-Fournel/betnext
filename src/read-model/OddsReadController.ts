@@ -8,7 +8,6 @@ import {
 } from '@nestjs/swagger';
 import { ODDS_READ_MODEL, OddsReadModel } from './OddsReadModel';
 
-/** Cote courante exposée dans le contrat (→ client front type-safe). */
 class CurrentOddsDto {
   @ApiProperty({ example: 'lol-finale-a' })
   outcomeId!: string;
@@ -16,10 +15,6 @@ class CurrentOddsDto {
   odds!: number;
 }
 
-/**
- * Lecture de la cote COURANTE servie depuis le read-model (Redis), JAMAIS depuis la base d'écriture.
- * Cold cache (aucun OddsUpdated projeté) → 404 explicite : la cohérence éventuelle est observable.
- */
 @ApiTags('odds')
 @Controller('odds')
 export class OddsReadController {

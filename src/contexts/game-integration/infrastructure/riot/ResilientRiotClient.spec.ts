@@ -9,7 +9,6 @@ const finished: RiotMatchPayload = {
   teams: [{ teamId: 100, win: true }],
 };
 
-/** Fake configurable : compte les appels réels à la dépendance. */
 class FakeRiotClient implements RiotClient {
   calls = 0;
   constructor(private readonly behavior: (call: number) => Promise<RiotMatchPayload>) {}

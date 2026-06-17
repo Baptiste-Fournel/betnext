@@ -14,15 +14,7 @@ export interface RegisterResult {
   role: Role;
 }
 
-/**
- * Inscription PUBLIQUE. INVARIANT DE DOMAINE (BET-20) : un compte auto-inscrit est TOUJOURS un
- * PLAYER — la règle vit ICI, dans le use-case, et non au seul bord HTTP. Conséquence : même si un
- * futur appelant oublie de forcer le rôle, AUCUNE escalade de privilège n'est possible. Les comptes
- * MANAGER sont provisionnés hors de ce use-case (seed / admin), jamais par auto-inscription.
- * Valide, refuse un username déjà pris (409), HACHE le mot de passe (jamais stocké en clair).
- */
 export class RegisterUser {
-  /** Rôle imposé à toute auto-inscription. */
   private static readonly SELF_REGISTER_ROLE: Role = 'PLAYER';
 
   constructor(

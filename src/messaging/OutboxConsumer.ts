@@ -7,12 +7,6 @@ export interface RedisConnection {
   port: number;
 }
 
-/**
- * Consommateur de la file (BullMQ Worker). Chaque job est traité IDEMPOTEMMENT (dé-doublonnage
- * par id d'event). L'« effet » métier est injecté (placeholder ici ; une vraie projection
- * read-model arrivera en BET-10). NB : idempotence du CONSOMMATEUR (events) ≠ idempotence HTTP
- * côté client (header Idempotency-Key, fenêtre de double-débit au retry) qui reste BET-8.
- */
 export class OutboxConsumer {
   constructor(
     private readonly queueName: string,

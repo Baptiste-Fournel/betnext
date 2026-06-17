@@ -1,10 +1,5 @@
 import { MatchOutcomeSide } from '../../domain/MatchReport';
 
-/**
- * Lien entre un match (externe) et un marché interne : la liste de SES issues (pour le règlement) et
- * le mapping côté-vainqueur → issue gagnante. C'est ce lien qui permet de régler le bon marché quand
- * un résultat arrive. (POC : porté par Game Integration, pas par Catalog → zéro couplage de contrat.)
- */
 export interface MatchLink {
   matchId: string;
   outcomes: string[];

@@ -52,7 +52,6 @@ class PlaceBetResponse {
   @ApiPropertyOptional({ example: true, description: "Cote d'ouverture (read-model froid)" })
   pricingProvisional?: boolean;
 }
-/** Vue d'un pari (snapshot autoritatif). */
 class BetViewDto {
   @ApiProperty()
   betId!: string;
@@ -72,7 +71,6 @@ class BetViewDto {
   })
   status!: string;
 }
-/** Une transition de la timeline (journal append-only). */
 class BetEventDto {
   @ApiProperty({ example: 1 })
   seq!: number;
@@ -87,11 +85,6 @@ interface PlaceBetBody {
   stake?: unknown;
 }
 
-/**
- * Adapter HTTP des paris — AUTHENTIFIÉ (BET-20). Le `userId` vient TOUJOURS du token (jamais du
- * corps), donc aucune usurpation. LECTURE scopée anti-IDOR : un joueur ne voit que SES paris ; un id
- * d'autrui (ou inconnu) → 404 indistinct. ÉCRITURE : POST /bets (CommandBus, `Idempotency-Key`).
- */
 @ApiTags('bets')
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({ description: 'Token Bearer requis/invalide' })
@@ -122,7 +115,6 @@ export class BettingController {
       throw new BadRequestException("Header 'Idempotency-Key' requis");
     }
     const { outcomeId, stake } = this.validate(body);
-    // userId = identité authentifiée (token), JAMAIS un champ client → pas d'usurpation.
     const requestHash = createHash('sha256')
       .update(JSON.stringify({ userId: user.userId, outcomeId, stake }))
       .digest('hex');

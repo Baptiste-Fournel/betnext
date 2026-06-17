@@ -4,10 +4,6 @@ import request from 'supertest';
 import { AppModule } from './app.module';
 import { TOKEN_SERVICE, TokenService } from './contexts/identity/application/ports/TokenService';
 
-/**
- * E2E (mode mémoire). Câblage HTTP→CQRS + AUTH (BET-20) : tout endpoint sensible exige un token ;
- * le `userId` vient du token ; scoping anti-IDOR ; rôles imposés.
- */
 describe('BetNext API (e2e, auth BET-20)', () => {
   let app: INestApplication;
   let tokenA = '';
@@ -38,7 +34,6 @@ describe('BetNext API (e2e, auth BET-20)', () => {
     await register('bob').expect(201);
     ({ token: tokenA, userId: userIdA } = await login('alice'));
     ({ token: tokenB } = await login('bob'));
-    // Compte MANAGER : provisionné (pas auto-inscrit). Token réellement signé par le service.
     managerTok = app
       .get<TokenService>(TOKEN_SERVICE)
       .sign({ userId: 'mgr-1', role: 'MANAGER' }).token;

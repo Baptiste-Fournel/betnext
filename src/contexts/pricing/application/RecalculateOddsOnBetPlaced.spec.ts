@@ -3,7 +3,6 @@ import { RecalculateOddsOnBetPlaced } from './RecalculateOddsOnBetPlaced';
 import { OddsPublisher, OddsUpdate } from './ports/OddsPublisher';
 import { PricingStore } from './ports/PricingStore';
 
-/** Doubles inline (la couche application ne dépend pas d'un adapter d'infrastructure — frontière). */
 class FakeStore implements PricingStore {
   private readonly processed = new Set<string>();
   private readonly stakes = new Map<string, number>();

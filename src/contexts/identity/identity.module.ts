@@ -15,12 +15,6 @@ import { InMemoryUserStore } from './infrastructure/InMemoryUserStore';
 import { TypeOrmUserStore } from './infrastructure/persistence/TypeOrmUserStore';
 import { AuthController } from './infrastructure/http/AuthController';
 
-/**
- * Contexte Identity (BET-20). Expose en GLOBAL le port partagé TOKEN_VERIFIER (le guard HTTP le
- * consomme sans importer l'intérieur d'Identity → frontières propres). Postgres si DATABASE_URL,
- * sinon en mémoire. Le secret de signature vient de l'ENV (`AUTH_SECRET`) ; en mode tests/contrat
- * (sans ENV) un secret éphémère aléatoire est généré au boot (jamais de secret en dur dans le repo).
- */
 @Global()
 @Module({
   controllers: [AuthController],
@@ -34,7 +28,6 @@ import { AuthController } from './infrastructure/http/AuthController';
       inject: [{ token: getDataSourceToken(), optional: true }],
     },
     {
-      // Une seule instance HMAC sert l'émission (TOKEN_SERVICE) ET la vérification (TOKEN_VERIFIER).
       provide: TOKEN_SERVICE,
       useFactory: (): HmacTokenService =>
         new HmacTokenService(process.env.AUTH_SECRET ?? randomBytes(32).toString('hex')),

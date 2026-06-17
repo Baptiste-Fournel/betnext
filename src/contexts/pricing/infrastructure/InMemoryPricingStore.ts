@@ -1,6 +1,5 @@
 import { PricingStore } from '../application/ports/PricingStore';
 
-/** État Pricing en mémoire : mono-process (POC/tests). Le scale-out réel passe par RedisPricingStore. */
 export class InMemoryPricingStore implements PricingStore {
   private readonly processed = new Set<string>();
   private readonly stakes = new Map<string, number>();

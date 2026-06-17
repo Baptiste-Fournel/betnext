@@ -15,7 +15,6 @@ import { JwtAuthGuard } from '../../../../shared/auth/jwt-auth.guard';
 import { RolesGuard } from '../../../../shared/auth/roles.guard';
 import { Roles } from '../../../../shared/auth/roles.decorator';
 
-/** Corps d'ouverture/alimentation d'un wallet (écrit l'entrée d'ouverture du ledger). */
 class OpenWalletRequest {
   @ApiProperty({ example: 'demo-player' })
   userId!: string;
@@ -35,11 +34,6 @@ interface OpenWalletBody {
   openingBalance?: unknown;
 }
 
-/**
- * Ouverture/alimentation d'un wallet — réservée au rôle **MANAGER** (BET-20) : crée/alimente de la
- * monnaie, c'est une action d'administration sur le wallet d'un utilisateur cible (le `userId` du
- * corps désigne ce compte — privilège manager assumé, pas un IDOR). Idempotente (ré-ouverture → false).
- */
 @ApiTags('wallet')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)

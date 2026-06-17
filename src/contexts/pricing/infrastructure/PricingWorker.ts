@@ -6,11 +6,6 @@ export interface RedisConnection {
   port: number;
 }
 
-/**
- * Adapter d'ENTRÉE du service Pricing : Worker BullMQ qui livre les BetPlaced du bus au use case.
- * Filtre par type ; transmet l'id de message (idempotence). Le service ne connaît Betting que par
- * ce contrat JSON (aucun import) → déployable indépendamment.
- */
 export class PricingWorker {
   constructor(
     private readonly queueName: string,

@@ -12,7 +12,6 @@ export interface PlaceBetProps {
   currentOdds: Odds;
 }
 
-/** Snapshot autoritatif persisté (ADR-005) : cote ET gain figés sont stockés, pas reconstruits. */
 export interface BetSnapshot {
   id: string;
   userId: string;
@@ -33,7 +32,6 @@ export class Bet {
     readonly outcomeId: string,
     readonly stake: number,
     readonly lockedOdds: Odds,
-    /** Gain potentiel FIGÉ à la pose et STOCKÉ — jamais recalculé à la lecture (ADR-005). */
     readonly potentialGain: number,
     private _status: BetStatus,
     readonly createdAt: Date,
@@ -58,7 +56,6 @@ export class Bet {
     return bet;
   }
 
-  /** Réhydrate depuis le snapshot — SANS émettre d'événement ni recalculer cote/gain. */
   static restore(snapshot: BetSnapshot): Bet {
     return new Bet(
       snapshot.id,

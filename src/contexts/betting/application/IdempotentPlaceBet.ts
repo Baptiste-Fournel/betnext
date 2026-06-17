@@ -9,13 +9,6 @@ export interface IdempotentPlaceBetInput extends PlaceBetInput {
   requestHash: string;
 }
 
-/**
- * Enveloppe PlaceBet d'une garantie d'idempotence HTTP. Réservation de la clé, création du pari
- * (débit + pari + events + outbox) et enregistrement du résultat sont dans UNE SEULE transaction
- * (UoW réentrant) → aucune fenêtre où deux requêtes passent le contrôle puis créent chacune un pari.
- * Une tentative échouée libère la clé (`release`) → un retry corrigé n'est jamais bloqué (faux 409).
- * Distinct de l'idempotence consommateur (BET-7) : ici c'est l'idempotence d'ÉCRITURE côté API.
- */
 export class IdempotentPlaceBet {
   constructor(
     private readonly placeBet: PlaceBet,
@@ -28,10 +21,10 @@ export class IdempotentPlaceBet {
       const claim = await this.store.claim(input.idempotencyKey, input.requestHash);
       if (!claim.claimed) {
         if (claim.existing.requestHash !== input.requestHash) {
-          throw new IdempotencyConflictError(); // même clé, corps différent → 409
+          throw new IdempotencyConflictError();
         }
         if (claim.existing.betId === null) {
-          throw new IdempotencyInProgressError(); // réservée mais non finie → 425 (défensif)
+          throw new IdempotencyInProgressError();
         }
         return {
           betId: claim.existing.betId,
@@ -48,7 +41,6 @@ export class IdempotentPlaceBet {
         await this.store.complete(input.idempotencyKey, result);
         return result;
       } catch (error) {
-        // tentative échouée → libère la clé (essentiel en mode sans tx ; sur Postgres le rollback l'annule)
         await this.store.release(input.idempotencyKey).catch(() => undefined);
         throw error;
       }

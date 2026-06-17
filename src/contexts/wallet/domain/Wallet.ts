@@ -1,9 +1,3 @@
-/**
- * Agrégat Wallet minimal. Le solde est la source de vérité (ADR-006 : jamais lu depuis un cache).
- * debit/credit/refund sont IDEMPOTENTS : rejouer la même opération (même clé) ne déplace jamais
- * le solde deux fois (ADR-008 livraison at-least-once ; ADR-004 la compensation ne doit pas
- * double-créditer).
- */
 export class Wallet {
   private readonly applied = new Set<string>();
 

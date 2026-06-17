@@ -1,7 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOkResponse, ApiProperty, ApiTags } from '@nestjs/swagger';
 
-/** Réponse du liveness probe — typée pour apparaître dans l'OpenAPI (→ client front type-safe). */
 class HealthResponse {
   @ApiProperty({ example: 'ok' })
   status!: string;
@@ -13,7 +12,6 @@ class HealthResponse {
   timestamp!: string;
 }
 
-/** Liveness probe (ops). Hors bounded context : préoccupation transverse d'infrastructure. */
 @ApiTags('health')
 @Controller('health')
 export class HealthController {

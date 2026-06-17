@@ -2,11 +2,6 @@ import { DataSource, EntityManager } from 'typeorm';
 import { TransactionContext } from '../../../persistence/TransactionContext';
 import { ComplianceStore, DailyReservation } from '../application/ports/ComplianceStore';
 
-/**
- * Adapter Postgres du contexte Responsible Gaming. `loadForReserve` garantit la ligne du jour puis
- * la VERROUILLE (`SELECT ... FOR UPDATE`) → deux paris concurrents du même joueur/jour se sérialisent
- * (anti-course). DOIT tourner dans la transaction ambiante (la réservation est atomique avec la pose).
- */
 export class TypeOrmComplianceStore implements ComplianceStore {
   constructor(
     private readonly dataSource: DataSource,

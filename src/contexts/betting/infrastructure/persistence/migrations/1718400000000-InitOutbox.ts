@@ -1,6 +1,5 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-/** Crée la table `outbox` (ADR-008). Idempotente. */
 export class InitOutbox1718400000000 implements MigrationInterface {
   name = 'InitOutbox1718400000000';
 

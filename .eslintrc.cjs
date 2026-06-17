@@ -10,7 +10,6 @@ module.exports = {
     '@typescript-eslint/no-non-null-assertion': 'off',
     '@typescript-eslint/no-inferrable-types': 'off',
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-    // Nommage cohérent et lisible (raisonnable : ne couvre que les sélecteurs sûrs sans type-info).
     '@typescript-eslint/naming-convention': [
       'error',
       { selector: 'variableLike', format: ['camelCase', 'UPPER_CASE', 'PascalCase'], leadingUnderscore: 'allow' },

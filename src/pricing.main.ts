@@ -10,13 +10,6 @@ import { PricingWorker } from './contexts/pricing/infrastructure/PricingWorker';
 import { BullMqQueueAdapter } from './messaging/BullMqQueueAdapter';
 import { DOMAIN_EVENTS_QUEUE, ODDS_QUEUE } from './messaging/topics';
 
-/**
- * SERVICE Pricing EXTRAIT (ADR-002, contrainte 3). Process AUTONOME qui ne communique que par le
- * BUS : CONSOMME BetPlaced (file domain-events), PUBLIE OddsUpdated (file odds). Aucun appel
- * in-process vers Betting ni l'inverse → preuve du "ready-to-split" / déploiement indépendant.
- * État dans Redis (RedisPricingStore) → SCALE-OUT horizontal : plusieurs répliques partagent les
- * totaux. Recalcul asynchrone hors chemin d'écriture (la cote du pari reste figée).
- */
 async function bootstrap(): Promise<void> {
   const logger = new Logger('PricingService');
   const redisUrl = process.env.REDIS_URL;

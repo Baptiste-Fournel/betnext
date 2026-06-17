@@ -3,13 +3,6 @@ import { MarketResult, SettlementDecision, SettlementStrategy } from './Settleme
 
 export const WINNING_OUTCOME_STRATEGY = 'WINNING_OUTCOME';
 
-/**
- * Première VRAIE stratégie concrète (marché à N issues), enregistrée par défaut → la couture
- * polymorphe est réellement exercée. Marché annulé → VOID (remboursement EXACT de la mise) ;
- * pari sur l'issue gagnante → WON, payé à la COTE FIGÉE (`potentialGain` stocké) ; sinon → LOST.
- * Le paiement à cote figée assume le P&L fixed-odds, BORNÉ par le clamp des cotes [1.10, 5.00]
- * (liability max = mise × 5) — modèle interne-cohérent et documenté (ADR-009).
- */
 export class WinningOutcomeStrategy implements SettlementStrategy {
   readonly key = WINNING_OUTCOME_STRATEGY;
 

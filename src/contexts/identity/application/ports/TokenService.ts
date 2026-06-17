@@ -7,7 +7,6 @@ export interface IssuedToken {
   expiresInSec: number;
 }
 
-/** Émission d'un token signé (la vérification est exposée séparément via TokenVerifierPort). */
 export interface TokenService {
   sign(input: { userId: string; role: Role }): IssuedToken;
 }

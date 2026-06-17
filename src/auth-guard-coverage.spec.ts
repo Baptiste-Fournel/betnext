@@ -13,11 +13,6 @@ import { ComplianceController } from './contexts/compliance/infrastructure/http/
 import { WalletController } from './contexts/wallet/infrastructure/http/WalletController';
 import { ReconciliationController } from './contexts/wallet/infrastructure/http/ReconciliationController';
 
-/**
- * Filet anti-régression d'autorisation (BET-20). Inspecte les métadonnées de CHAQUE contrôleur : tout
- * endpoint qui n'est pas EXPLICITEMENT dans l'allowlist publique DOIT porter `JwtAuthGuard`. Aurait
- * attrapé automatiquement l'oubli de guard sur `SettlementController`, et protège tout futur endpoint.
- */
 const CONTROLLERS: Type[] = [
   HealthController,
   OddsReadController,
@@ -31,7 +26,6 @@ const CONTROLLERS: Type[] = [
   ReconciliationController,
 ];
 
-// Endpoints VOLONTAIREMENT publics (non user-spécifiques). Tout le reste exige une authentification.
 const PUBLIC_ALLOWLIST = new Set<string>([
   'GET /health',
   'GET /odds/:outcomeId',

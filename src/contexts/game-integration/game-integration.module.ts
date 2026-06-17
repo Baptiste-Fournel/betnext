@@ -16,12 +16,6 @@ import { RiotGameProvider } from './infrastructure/RiotGameProvider';
 import { InMemoryMatchLinkStore } from './infrastructure/InMemoryMatchLinkStore';
 import { GameIntegrationController } from './infrastructure/http/GameIntegrationController';
 
-/**
- * Contexte Game Integration (BET-21). Parle au reste via PORTS uniquement : il consomme le port
- * partagé `MARKET_SETTLEMENT_PORT` (fourni par Betting) pour régler — sans importer l'intérieur de
- * Betting (frontières vérifiées par dependency-cruiser). Le client Riot est RÉSILIENT (CB/timeout/
- * retry) ; sans `RIOT_API_KEY`, on bascule sur un STUB → l'app démarre et la CI tournent sans clé.
- */
 @Module({
   controllers: [GameIntegrationController],
   providers: [

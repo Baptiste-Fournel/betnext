@@ -1,7 +1,6 @@
 import { Column, Entity, PrimaryColumn } from 'typeorm';
 import { numericTransformer } from './numeric.transformer';
 
-/** SNAPSHOT du pari (état autoritatif). La cote figée est STOCKÉE, jamais recalculée à la lecture. */
 @Entity('bets')
 export class BetRecord {
   @PrimaryColumn('varchar')

@@ -1,11 +1,6 @@
 import { Queue } from 'bullmq';
 import { OutboxMessage, QueuePort } from './QueuePort';
 
-/**
- * Adapter BullMQ du port de file. `jobId = id de la ligne outbox` → dé-doublonnage BullMQ, mais
- * c'est une fenêtre BORNÉE (removeOnComplete) : le garant PÉRENNE de l'idempotence est la table
- * `processed_messages` côté consommateur. Rétention bornée pour ne pas faire grossir Redis.
- */
 export class BullMqQueueAdapter implements QueuePort {
   constructor(private readonly queue: Queue) {}
 

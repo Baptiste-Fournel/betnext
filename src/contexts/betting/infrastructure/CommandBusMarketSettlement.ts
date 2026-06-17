@@ -7,12 +7,6 @@ import {
 import { SettleMarketCommand } from '../application/SettleMarketCommand';
 import { SettleMarketResult } from '../application/SettleMarket';
 
-/**
- * Implémentation Betting du port partagé `MarketSettlementPort` : règle via la couture existante
- * (SettleMarketCommand → SettleMarket, BET-12) — donc EXACTEMENT-UNE-FOIS / idempotent par
- * construction (seuls les paris EN ATTENTE sont réglés ; un rejeu ne double rien). Game Integration
- * consomme ce port sans connaître l'intérieur de Betting.
- */
 export class CommandBusMarketSettlement implements MarketSettlementPort {
   constructor(private readonly commandBus: CommandBus) {}
 

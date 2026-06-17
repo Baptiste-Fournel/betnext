@@ -1,6 +1,5 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-/** Crée la table `users` (contexte Identity) + l'unicité du username. Idempotente. */
 export class InitIdentity1719100000000 implements MigrationInterface {
   name = 'InitIdentity1719100000000';
 

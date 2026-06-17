@@ -3,10 +3,6 @@ import { DailyCapExceededError } from './DailyCapExceededError';
 
 export const DAILY_CAP_POLICY = 'DAILY_CAP';
 
-/**
- * 1re VRAIE règle enregistrée (la couture est exercée, pas une interface vide). Plafond non défini
- * → autorisé ; sinon refuse si le total misé du jour + la mise dépasse le plafond.
- */
 export class DailyCapPolicy implements CompliancePolicy {
   readonly key = DAILY_CAP_POLICY;
 

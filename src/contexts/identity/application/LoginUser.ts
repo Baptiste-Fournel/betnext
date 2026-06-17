@@ -15,11 +15,6 @@ export interface LoginResult {
   expiresInSec: number;
 }
 
-/**
- * Login : vérifie le mot de passe contre le HASH (temps constant via le port) et émet un token signé.
- * Message d'erreur IDENTIQUE pour « utilisateur inconnu » et « mauvais mot de passe » (401) → pas
- * d'énumération de comptes.
- */
 export class LoginUser {
   constructor(
     private readonly users: UserStore,

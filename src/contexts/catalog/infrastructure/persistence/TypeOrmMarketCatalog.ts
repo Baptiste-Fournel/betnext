@@ -3,11 +3,6 @@ import { DataSource } from 'typeorm';
 import { CatalogMarket, MarketCatalog, NewMarket } from '../../application/ports/MarketCatalog';
 import { MarketRecord } from './MarketRecord';
 
-/**
- * Catalogue persistant sur Postgres. Même sémantique que l'adapter en mémoire (la création assigne
- * les identifiants marché + issues), mais les marchés **survivent au redémarrage** → store persistant
- * par défaut (BET-19). Lecture/création simples (pas de money-safety : aucun argent ici).
- */
 export class TypeOrmMarketCatalog implements MarketCatalog {
   constructor(private readonly dataSource: DataSource) {}
 

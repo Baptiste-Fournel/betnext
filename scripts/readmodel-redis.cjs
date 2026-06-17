@@ -1,8 +1,4 @@
 /* eslint-disable */
-// E2E BET-10 sur VRAI Redis : OddsUpdated (file odds) -> OddsProjectorService (worker câblé au
-// boot) -> RedisOddsReadModel (hash) -> lecture servie depuis Redis (jamais la base d'écriture).
-// Vérifie aussi le COLD CACHE (null avant toute projection). SKIP sans REDIS_URL. Tourne en CI.
-// Lancer : npm run test:readmodel:redis
 require('reflect-metadata');
 const assert = require('node:assert');
 const { randomUUID } = require('node:crypto');
@@ -40,11 +36,9 @@ async function waitFor(cond, timeout) {
   assert.strictEqual(await readModel.current('o1'), null, 'cold cache : null avant toute projection');
   console.log('✓ cold cache : aucune cote avant OddsUpdated (cohérence éventuelle observable)');
 
-  // Projecteur câblé au boot : consomme OddsUpdated -> read-model Redis
   const projector = new OddsProjectorService(readModel);
   projector.onApplicationBootstrap();
 
-  // Pricing publie OddsUpdated sur le bus
   await new BullMqQueueAdapter(oddsQueue).enqueue({
     id: randomUUID(),
     type: 'OddsUpdated',
@@ -55,13 +49,12 @@ async function waitFor(cond, timeout) {
   assert.strictEqual(await readModel.current('o1'), 3.5, 'cote lue depuis le read-model Redis');
   console.log('✓ OddsUpdated -> projecteur -> read-model Redis -> lecture = 3.5 (servie depuis Redis)');
 
-  // out-of-order : un snapshot plus ANCIEN arrivé après ne doit pas écraser le plus récent
   const tNew = Date.now();
   const adapter = new BullMqQueueAdapter(oddsQueue);
   await adapter.enqueue({ id: randomUUID(), type: 'OddsUpdated', payload: JSON.stringify({ type: 'OddsUpdated', occurredAt: new Date(tNew).toISOString(), updates: [{ outcomeId: 'o2', odds: 4 }] }) });
   await adapter.enqueue({ id: randomUUID(), type: 'OddsUpdated', payload: JSON.stringify({ type: 'OddsUpdated', occurredAt: new Date(tNew - 10000).toISOString(), updates: [{ outcomeId: 'o2', odds: 9 }] }) });
   await waitFor(async () => (await readModel.current('o2')) === 4, 12000);
-  await sleep(800); // laisser le snapshot ancien être traité (et rejeté)
+  await sleep(800);
   assert.strictEqual(await readModel.current('o2'), 4, 'snapshot plus ancien ignoré (garde monotone)');
   console.log('\u2713 out-of-order : snapshot plus ancien ignore -> cote pas durablement fausse');
 

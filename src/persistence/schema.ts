@@ -18,12 +18,6 @@ import { InitCompliance1718900000000 } from '../contexts/compliance/infrastructu
 import { InitCatalog1719000000000 } from '../contexts/catalog/infrastructure/persistence/migrations/1719000000000-InitCatalog';
 import { InitIdentity1719100000000 } from '../contexts/identity/infrastructure/persistence/migrations/1719100000000-InitIdentity';
 
-/**
- * SOURCE UNIQUE du schéma (BET-19) : entités + migrations, importée par le runtime
- * (`PersistenceModule`) ET le CLI TypeORM (`data-source.ts`) → plus de liste dupliquée à maintenir.
- * Les migrations sont idempotentes (`CREATE TABLE IF NOT EXISTS`, triggers/index gardés) et
- * rejouables : un schéma vierge devient une app fonctionnelle au boot (`migrationsRun`).
- */
 export const ENTITIES = [
   BetRecord,
   BetEventRecord,

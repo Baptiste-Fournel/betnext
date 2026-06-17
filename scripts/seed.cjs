@@ -1,21 +1,15 @@
 /* eslint-disable */
-// Seed REPRODUCTIBLE (BET-19 + BET-20) : deux VRAIS comptes (mots de passe HASHÉS) — un joueur et un
-// gestionnaire — chacun avec un wallet ouvert (solde + entrée d'ouverture du ledger), et UN marché
-// N-issues. Idempotent (ON CONFLICT DO NOTHING) → rejouable sans doublon.
-// Lancer : npm run db:seed   (utilise DATABASE_URL, défaut = Postgres local du docker-compose)
 const { DataSource } = require('typeorm');
 const { scryptSync, randomBytes } = require('node:crypto');
 
 const DEMO_OPENING = 100;
 const DEMO_MARKET_ID = 'mkt-demo-lol';
 const DEMO_PASSWORD = 'changeme123';
-// id = username (continuité : wallets/paris sont keyés par userId = id du compte authentifié).
 const ACCOUNTS = [
   { id: 'demo-player', username: 'demo-player', role: 'PLAYER' },
   { id: 'demo-manager', username: 'demo-manager', role: 'MANAGER' },
 ];
 
-/** Hash scrypt au MÊME format que ScryptPasswordHasher (`scrypt$saltHex$hashHex`, clé 64 octets). */
 function hashPassword(plain) {
   const salt = randomBytes(16);
   return `scrypt$${salt.toString('hex')}$${scryptSync(plain, salt, 64).toString('hex')}`;
@@ -32,7 +26,6 @@ async function openWallet(ds, userId, opening) {
   );
 }
 
-/** Applique le seed sur une DataSource déjà initialisée + migrée. Idempotent. */
 async function runSeed(dataSource) {
   for (const acc of ACCOUNTS) {
     await dataSource.query(
@@ -55,7 +48,6 @@ async function runSeed(dataSource) {
 
 module.exports = { runSeed, ACCOUNTS, DEMO_OPENING, DEMO_MARKET_ID, DEMO_PASSWORD };
 
-// Exécution CLI : connecte (DATABASE_URL), joue les migrations, applique le seed.
 if (require.main === module) {
   (async () => {
     const { ENTITIES, MIGRATIONS } = require('../dist/persistence/schema.js');

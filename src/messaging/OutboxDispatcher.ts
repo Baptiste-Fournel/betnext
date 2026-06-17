@@ -13,12 +13,6 @@ import { OutboxRelay } from './OutboxRelay';
 import { BullMqQueueAdapter } from './BullMqQueueAdapter';
 import { DOMAIN_EVENTS_QUEUE } from './topics';
 
-/**
- * Câble le relais Outbox dans le BOOT réel du monolithe (comble le trou laissé par BET-7) : un
- * poll périodique vide l'outbox vers le bus tant que l'app tourne — les events circulent vraiment,
- * pas seulement en test. Actif uniquement si DATABASE_URL (outbox) ET REDIS_URL (bus) sont définis ;
- * sinon inerte (mode POC/tests en mémoire). At-least-once (publié après enqueue) ; ticks non chevauchés.
- */
 @Injectable()
 export class OutboxDispatcher implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(OutboxDispatcher.name);

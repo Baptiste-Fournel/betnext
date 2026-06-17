@@ -2,10 +2,6 @@ import { Bet } from '../domain/Bet';
 import { BetStatus } from '../domain/BetStatus';
 import { BetRepository, StoredBetEvent } from '../application/ports/BetRepository';
 
-/**
- * Adapter en mémoire (dev / tests / mode sans DATABASE_URL). Respecte la même sémantique que
- * l'adapter Postgres : snapshot autoritatif + journal append-only (insertions uniquement).
- */
 export class InMemoryBetRepository implements BetRepository {
   private readonly snapshots = new Map<string, Bet>();
   private readonly events: StoredBetEvent[] = [];

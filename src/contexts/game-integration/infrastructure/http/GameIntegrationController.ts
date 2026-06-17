@@ -85,12 +85,6 @@ interface RegisterBody {
   mapping?: unknown;
 }
 
-/**
- * Intégration jeu (Riot) — endpoints d'ADMINISTRATION réservés au rôle MANAGER. (1) Lier un match à un
- * marché + mapping côté→issue ; (2) DÉCLENCHER la synchro d'un résultat → règlement auto via la
- * couture existante (exactly-once). Mécanisme « déclenché » (simple, démontrable) ; un scheduler
- * appellerait le même use-case.
- */
 @ApiTags('game-integration')
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({ description: 'Token Bearer requis/invalide' })

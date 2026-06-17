@@ -8,11 +8,6 @@ import { OddsStream } from './OddsStream';
 import { OddsReadController } from './OddsReadController';
 import { OddsStreamController } from './OddsStreamController';
 
-/**
- * Côté LECTURE du CQRS (ADR-006). Read-model des cotes : projeté depuis OddsUpdated, lu par le
- * joueur (GET /odds), par le placement (ReadModelOddsProvider), et diffusé en direct via SSE
- * (GET /streams/odds — BET-14 inc.3). Redis si REDIS_URL, sinon mémoire. Global → instance unique.
- */
 @Global()
 @Module({
   controllers: [OddsReadController, OddsStreamController],

@@ -1,9 +1,4 @@
 /* eslint-disable */
-// E2E BET-8 sur VRAI Redis (même rigueur que Postgres) : la chaîne COMPLÈTE du boot —
-//   outbox (Postgres) -> OutboxDispatcher (relais câblé au boot, le livrable de BET-8) -> bus
-//   -> PricingWorker (process bus-only, état Redis partagé) -> OddsUpdated publié.
-// Vérifie aussi l'IDEMPOTENCE en double-livraison (re-livraison -> pas de double comptage).
-// Postgres = embedded-postgres ; SKIP sans REDIS_URL. Lancer : npm run test:pricing:redis
 require('reflect-metadata');
 const assert = require('node:assert');
 const { randomUUID } = require('node:crypto');
@@ -68,7 +63,6 @@ const betPlaced = (outcomeId, stake) => JSON.stringify({ type: 'BetPlaced', outc
   const odds = new Queue(ODDS_QUEUE, { connection });
   try { await domain.obliterate({ force: true }); await odds.obliterate({ force: true }); } catch (_) {}
 
-  // SERVICE Pricing (process bus-only, état partagé Redis)
   const recalc = new RecalculateOddsOnBetPlaced(
     new RedisPricingStore(redis), new OddsCalculator(),
     new QueueOddsPublisher(new BullMqQueueAdapter(odds)),
@@ -77,14 +71,12 @@ const betPlaced = (outcomeId, stake) => JSON.stringify({ type: 'BetPlaced', outc
   const received = [];
   const oddsWorker = new Worker(ODDS_QUEUE, async (job) => { received.push(JSON.parse(job.data.payload)); }, { connection });
 
-  // Betting écrit l'outbox (ici on insère 2 BetPlaced) — puis le RELAIS DU BOOT les publie
   const idA = randomUUID(); const idB = randomUUID();
   await ds.getRepository(OutboxRecord).insert([
     { id: idA, type: 'BetPlaced', payload: betPlaced('A', 10) },
     { id: idB, type: 'BetPlaced', payload: betPlaced('B', 30) },
   ]);
 
-  // OutboxDispatcher : le relais câblé dans le boot réel (le livrable de BET-8)
   const dispatcher = new OutboxDispatcher(ds);
   dispatcher.onApplicationBootstrap();
 
@@ -95,7 +87,6 @@ const betPlaced = (outcomeId, stake) => JSON.stringify({ type: 'BetPlaced', outc
   assert.strictEqual(unpublished, 0, 'le relais du boot a vidé l outbox');
   console.log('✓ boot réel : outbox -> OutboxDispatcher -> bus -> Pricing -> OddsUpdated (vrai Redis)');
 
-  // IDEMPOTENCE : re-livraison du MÊME message (même id) -> aucun double comptage
   await new BullMqQueueAdapter(domain).enqueue({ id: idA, type: 'BetPlaced', payload: betPlaced('A', 10) });
   await sleep(1500);
   const totalA = await redis.hget('pricing:stakes', 'A');

@@ -1,7 +1,4 @@
 /* eslint-disable */
-// Génère le contrat OpenAPI (packages/api-contract/openapi.json) à partir du back, SANS démarrer de
-// serveur : boote AppModule en mémoire (sans DATABASE_URL/REDIS_URL), scanne les routes, écrit le spec.
-// Source de vérité du client typé du front. Lancer : npm run openapi:generate
 require('reflect-metadata');
 const { writeFileSync, mkdirSync } = require('node:fs');
 const { NestFactory } = require('@nestjs/core');

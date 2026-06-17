@@ -1,11 +1,6 @@
 import { DomainError } from '../../../shared-kernel/domain/DomainError';
 import { WalletFunding } from './ports/WalletFunding';
 
-/**
- * Ouvre/alimente un wallet avec un solde d'ouverture (origine du ledger — BET-15). Écriture NORMALE
- * (validation simple, pas la rigueur money-safety du chemin de pari) : le solde et l'entrée
- * d'ouverture sont écrits atomiquement par l'adapter, et l'opération est idempotente.
- */
 export class OpenWallet {
   constructor(private readonly funding: WalletFunding) {}
 

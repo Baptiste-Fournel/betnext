@@ -7,10 +7,6 @@ export interface CreateMarketInput {
   outcomeLabels: string[];
 }
 
-/**
- * Création d'un marché GÉNÉRIQUE (N issues — pas figé à 3). Écriture NORMALE : validation simple
- * (événement nommé, jeu, ≥ 2 issues non vides) ; PAS la rigueur money-safety (aucun argent ici).
- */
 export class CreateMarket {
   constructor(private readonly catalog: MarketCatalog) {}
 

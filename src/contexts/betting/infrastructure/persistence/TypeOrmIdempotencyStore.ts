@@ -6,11 +6,6 @@ import {
   PlaceBetResult,
 } from '../../application/ports/IdempotencyStore';
 
-/**
- * Store Postgres. `claim` = INSERT ... ON CONFLICT DO NOTHING : un seul appelant réserve. En
- * concurrence, le perdant BLOQUE sur l'insert non commité du gagnant ; après commit du gagnant
- * (clé + résultat dans la MÊME transaction), il lit l'entrée complétée → renvoie le même résultat.
- */
 export class TypeOrmIdempotencyStore implements IdempotencyStore {
   constructor(
     private readonly dataSource: DataSource,

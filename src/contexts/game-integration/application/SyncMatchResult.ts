@@ -14,13 +14,6 @@ export interface SyncResult {
   summary?: SettlementSummary;
 }
 
-/**
- * Récupère le résultat d'un match via le `GameProvider` (résilient + ACL) et, s'il est FINI, RÈGLE
- * automatiquement le marché lié via le port de settlement (couture BET-12). Le mapping côté→issue
- * donne l'issue gagnante ; un résultat sans issue mappée (ex. nul non prévu) → marché ANNULÉ
- * (remboursement). PENDING → on ne règle pas. EXACTEMENT-UNE-FOIS : le settlement sous-jacent ne règle
- * que les paris EN ATTENTE → re-synchroniser ne double JAMAIS un règlement (rejeu sûr).
- */
 export class SyncMatchResult {
   constructor(
     private readonly provider: GameProvider,

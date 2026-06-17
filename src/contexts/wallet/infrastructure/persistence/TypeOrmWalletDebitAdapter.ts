@@ -3,21 +3,6 @@ import { WalletDebitPort } from '../../../../shared-kernel/ports/WalletDebitPort
 import { TransactionContext } from '../../../../persistence/TransactionContext';
 import { WalletRecord } from './WalletRecord';
 
-/**
- * Adapter Postgres du débit wallet. Deux garde-fous, dans la transaction ambiante (TransactionContext) :
- *  1. JOURNALISE le mouvement dans `wallet_operations` (montant SIGNÉ négatif, kind `DEBIT`, opKey
- *     `stake:<ref>`) AVANT de toucher le solde → le ledger est COMPLET (BET-15) : Σ(mouvements) reste
- *     égal au solde, donc la réconciliation peut détecter toute dérive. `ON CONFLICT DO NOTHING` rend
- *     le débit EXACTEMENT-UNE-FOIS (rejeu / retry avec la même réf → no-op, jamais de double-débit) —
- *     symétrique du crédit (BET-12).
- *  2. DÉBITE `wallets` via un UPDATE conditionnel ATOMIQUE (`balance >= montant`) → pas de
- *     read-modify-write, donc pas de lost update sous concurrence (BET-5). 0 ligne affectée → solde
- *     insuffisant → on LÈVE, ce qui roule en arrière l'écriture du ledger (même tx) : jamais de
- *     mouvement orphelin.
- *
- * S'exécute DANS la transaction du pari (BET-5) et REFUSE l'auto-commit (sinon fenêtre d'état partiel :
- * débit/ledger sans pari).
- */
 export class TypeOrmWalletDebitAdapter implements WalletDebitPort {
   constructor(private readonly context: TransactionContext) {}
 
@@ -31,9 +16,8 @@ export class TypeOrmWalletDebitAdapter implements WalletDebitPort {
       [`stake:${operationRef}`, userId, -amount, 'DEBIT'],
     );
     if (inserted.length === 0) {
-      return; // déjà appliqué → no-op (exactement-une-fois)
+      return;
     }
-    // UPDATE conditionnel atomique (affected fiable via queryBuilder, vs tuple renvoyé par query brut).
     const result = await manager
       .createQueryBuilder()
       .update(WalletRecord)
@@ -42,7 +26,6 @@ export class TypeOrmWalletDebitAdapter implements WalletDebitPort {
       .andWhere('balance >= :amount', { amount })
       .execute();
     if (!result.affected) {
-      // 0 ligne affectée → solde insuffisant (ou wallet absent) → rollback du ledger (même tx).
       throw new DomainError('Insufficient balance');
     }
   }

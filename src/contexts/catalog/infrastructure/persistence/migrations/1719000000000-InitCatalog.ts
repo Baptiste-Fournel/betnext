@@ -1,6 +1,5 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-/** Crée `markets` (catalogue persistant — BET-19). Idempotente. */
 export class InitCatalog1719000000000 implements MigrationInterface {
   name = 'InitCatalog1719000000000';
 

@@ -13,12 +13,6 @@ export interface BetView {
   status: string;
 }
 
-/**
- * Lecture des données JOUEUR depuis Postgres (store autoritatif) → READ-YOUR-WRITES : le pari tout
- * juste posé est visible immédiatement (cohérence forte). La cote renvoyée est la cote FIGÉE du
- * snapshot, jamais recalculée — distincte de la cote COURANTE (read-model Redis, éventuellement
- * cohérente). Sépare nettement les deux chemins de lecture du CQRS.
- */
 @QueryHandler(GetBetQuery)
 export class GetBetHandler implements IQueryHandler<GetBetQuery, BetView | null> {
   constructor(@Inject(BET_REPOSITORY) private readonly bets: BetRepository) {}
@@ -26,7 +20,6 @@ export class GetBetHandler implements IQueryHandler<GetBetQuery, BetView | null>
   async execute(query: GetBetQuery): Promise<BetView | null> {
     const bet = await this.bets.findById(query.betId);
     if (!bet || bet.userId !== query.requesterUserId) {
-      // Inexistant OU non possédé → réponse INDISTINCTE (anti-IDOR : aucune fuite d'existence).
       return null;
     }
     return {

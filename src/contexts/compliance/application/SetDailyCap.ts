@@ -1,7 +1,6 @@
 import { DomainError } from '../../../shared-kernel/domain/DomainError';
 import { ComplianceStore } from './ports/ComplianceStore';
 
-/** Le joueur définit/modifie son plafond quotidien (possédé par Responsible Gaming). */
 export class SetDailyCap {
   constructor(private readonly store: ComplianceStore) {}
 

@@ -9,12 +9,6 @@ import { Role } from '../domain/Role';
 
 const b64urlJson = (obj: unknown): string => Buffer.from(JSON.stringify(obj)).toString('base64url');
 
-/**
- * Token signé compact (type JWT HS256) basé sur `crypto` natif. ÉMET (TokenService) et VÉRIFIE
- * (TokenVerifierPort, consommé par le guard). Le secret vient de l'ENV (jamais en dur). La
- * vérification recalcule la signature avec un algorithme FIXE (HMAC-SHA256) — l'`alg` du header n'est
- * jamais honoré → pas d'attaque « alg:none ». Signature et expiration comparées à temps constant.
- */
 export class HmacTokenService implements TokenService, TokenVerifierPort {
   private readonly header = b64urlJson({ alg: 'HS256', typ: 'JWT' });
 
@@ -59,7 +53,7 @@ export class HmacTokenService implements TokenService, TokenVerifierPort {
       return null;
     }
     if (typeof exp !== 'number' || exp < Math.floor(Date.now() / 1000)) {
-      return null; // expiré
+      return null;
     }
     return { userId: sub, role: role as AuthRole };
   }

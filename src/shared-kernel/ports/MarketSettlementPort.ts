@@ -1,8 +1,3 @@
-/**
- * Contrat PARTAGÉ (Shared Kernel) pour RÉGLER un marché depuis un autre contexte, SANS importer
- * l'intérieur de Betting. Betting fournit l'implémentation (au-dessus de la couture SettleMarket /
- * BET-12 : exactement-une-fois, idempotent) ; Game Integration le consomme. « Ready-to-split ».
- */
 export const MARKET_SETTLEMENT_PORT = Symbol('MarketSettlementPort');
 
 export interface SettlementRequest {

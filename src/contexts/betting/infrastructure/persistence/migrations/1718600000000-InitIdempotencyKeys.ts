@@ -1,6 +1,5 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-/** Crée `idempotency_keys` (idempotence HTTP côté client). Idempotente. */
 export class InitIdempotencyKeys1718600000000 implements MigrationInterface {
   name = 'InitIdempotencyKeys1718600000000';
 

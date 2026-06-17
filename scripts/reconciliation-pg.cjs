@@ -1,9 +1,4 @@
 /* eslint-disable */
-// Réconciliation argent (BET-15) sur un VRAI Postgres (embedded-postgres, sans Docker). Prouve que
-// le filet « zéro perte après réconciliation » : (1) ledger complet -> Σ(mouvements)=solde, (2) une
-// dérive injectée HORS ledger est DÉTECTÉE et RAPPORTÉE sans auto-correction, (3) un Outbox non drainé
-// (async en vol) n'est PAS une fausse dérive, (4) le job est idempotent (lecture seule).
-// Lancer : npm run test:reconciliation:pg
 require('reflect-metadata');
 const assert = require('node:assert');
 const { rmSync } = require('node:fs');
@@ -69,55 +64,50 @@ const PORT = 55436;
   const balanceOf = async (u) => Number((await ds.query('SELECT balance FROM wallets WHERE "userId"=$1', [u]))[0].balance);
   const ledgerSumOf = async (u) => Number((await ds.query('SELECT COALESCE(SUM(amount),0) AS s FROM wallet_operations WHERE "userId"=$1', [u]))[0].s);
 
-  // 1) OUVERTURE : écrit l'entrée d'ouverture (OPENING) et reste balanced ; ré-ouverture = no-op
   await reset();
   assert.strictEqual(await funding.open('u1', 100), true);
   const opening = await ds.query("SELECT amount FROM wallet_operations WHERE \"userId\"='u1' AND kind='OPENING'");
   assert.strictEqual(opening.length, 1);
   assert.strictEqual(Number(opening[0].amount), 100);
-  assert.strictEqual(await funding.open('u1', 999), false); // idempotent
-  assert.strictEqual(await balanceOf('u1'), 100); // ré-ouverture n'a pas changé le solde
+  assert.strictEqual(await funding.open('u1', 999), false);
+  assert.strictEqual(await balanceOf('u1'), 100);
   let r = await recon.execute();
   assert.strictEqual(r.balanced, true);
   assert.strictEqual(r.walletsChecked, 1);
   console.log('✓ ouverture : entrée OPENING +100 écrite, ré-ouverture no-op, réconciliation balanced');
 
-  // 2) CYCLE COMPLET open -> pari -> règlement gagné : Σ(ledger) == solde à chaque étape
   await reset();
   await funding.open('u1', 100);
-  await placeBet('rb1', { userId: 'u1', outcomeId: 'o1', stake: 20 }); // -20
+  await placeBet('rb1', { userId: 'u1', outcomeId: 'o1', stake: 20 });
   assert.strictEqual(await balanceOf('u1'), 80);
   assert.strictEqual(await ledgerSumOf('u1'), 80);
   assert.strictEqual((await recon.execute()).balanced, true);
-  await settle.execute({ outcomes: ['o1'], winningOutcomeId: 'o1', voided: false }); // +40 (cote figée 2.0)
+  await settle.execute({ outcomes: ['o1'], winningOutcomeId: 'o1', voided: false });
   assert.strictEqual(await balanceOf('u1'), 120);
   assert.strictEqual(await ledgerSumOf('u1'), 120);
   assert.strictEqual((await recon.execute()).balanced, true);
   console.log('✓ cycle open/pari/règlement : Σ(ledger) == solde (120) à chaque étape, balanced');
 
-  // 3) ASYNC EN VOL : un Outbox NON DRAINÉ (events en file) n'est PAS une dérive
   await reset();
   await funding.open('u1', 100);
   await placeBet('rb2', { userId: 'u1', outcomeId: 'o1', stake: 20 });
   const unpublished = (await ds.query('SELECT count(*)::int AS c FROM outbox WHERE "publishedAt" IS NULL'))[0].c;
   assert.ok(unpublished >= 1, 'au moins un event en file (non publié)');
   r = await recon.execute();
-  assert.strictEqual(r.balanced, true); // argent cohérent malgré l'async en vol
+  assert.strictEqual(r.balanced, true);
   console.log('✓ en vol : Outbox non drainé (' + unpublished + ' event[s] en file) -> AUCUNE fausse dérive (balanced)');
 
-  // 4) DÉRIVE INJECTÉE hors ledger : détectée, rapportée, et JAMAIS corrigée en douce
   await reset();
   await funding.open('u1', 100);
-  await placeBet('rb3', { userId: 'u1', outcomeId: 'o1', stake: 20 }); // solde 80, ledger 80
-  await ds.query("UPDATE wallets SET balance = balance + 50 WHERE \"userId\"='u1'"); // corruption: +50 SANS mouvement
+  await placeBet('rb3', { userId: 'u1', outcomeId: 'o1', stake: 20 });
+  await ds.query("UPDATE wallets SET balance = balance + 50 WHERE \"userId\"='u1'");
   r = await recon.execute();
   assert.strictEqual(r.balanced, false);
   assert.strictEqual(r.drifts.length, 1);
   assert.deepStrictEqual(r.drifts[0], { userId: 'u1', expectedBalance: 80, actualBalance: 130, difference: 50 });
-  assert.strictEqual(await balanceOf('u1'), 130); // PAS d'auto-correction : le solde reste dérivé
+  assert.strictEqual(await balanceOf('u1'), 130);
   console.log('✓ dérive injectée (+50 hors ledger) : DÉTECTÉE et rapportée (attendu 80, réel 130, écart +50), AUCUNE correction');
 
-  // 5) IDEMPOTENT au rejeu : 2 exécutions -> rapport IDENTIQUE et ZÉRO écriture (lecture seule)
   const opsBefore = (await ds.query('SELECT count(*)::int AS c FROM wallet_operations'))[0].c;
   const r1 = await recon.execute();
   const r2 = await recon.execute();
@@ -125,16 +115,15 @@ const PORT = 55436;
   assert.strictEqual(r1.balanced, r2.balanced);
   assert.strictEqual(r1.walletsChecked, r2.walletsChecked);
   const opsAfter = (await ds.query('SELECT count(*)::int AS c FROM wallet_operations'))[0].c;
-  assert.strictEqual(opsAfter, opsBefore); // aucune ligne ajoutée
-  assert.strictEqual(await balanceOf('u1'), 130); // solde inchangé par le job
+  assert.strictEqual(opsAfter, opsBefore);
+  assert.strictEqual(await balanceOf('u1'), 130);
   console.log('✓ idempotent : rejeu -> rapport identique, 0 écriture (wallet_operations inchangé), solde inchangé');
 
-  // 6) MULTI-WALLETS : seul le wallet en dérive est rapporté, le sain ne l'est pas
   await reset();
   await funding.open('u1', 100);
   await funding.open('u2', 50);
-  await placeBet('m1', { userId: 'u1', outcomeId: 'o1', stake: 20 }); // u1 sain : 80 == 80
-  await ds.query("UPDATE wallets SET balance = balance - 10 WHERE \"userId\"='u2'"); // u2 dérive -10
+  await placeBet('m1', { userId: 'u1', outcomeId: 'o1', stake: 20 });
+  await ds.query("UPDATE wallets SET balance = balance - 10 WHERE \"userId\"='u2'");
   r = await recon.execute();
   assert.strictEqual(r.walletsChecked, 2);
   assert.strictEqual(r.drifts.length, 1);
@@ -142,7 +131,6 @@ const PORT = 55436;
   assert.strictEqual(r.drifts[0].difference, -10);
   console.log('✓ multi-wallets : seul le wallet en dérive (u2, écart -10) est rapporté ; le sain (u1) ne l’est pas');
 
-  // 7) MONEY-SAFETY DU CRÉDIT (A-1a) : créditer un wallet INEXISTANT lève → ledger rollback, 0 orpheline
   await reset();
   let threwCredit = false;
   try {
@@ -156,11 +144,10 @@ const PORT = 55436;
   assert.strictEqual(
     (await ds.query('SELECT count(*)::int AS c FROM wallet_operations'))[0].c,
     0,
-  ); // la ligne ledger a été rollback → aucune orpheline, aucun argent perdu
+  );
   assert.strictEqual((await recon.execute()).balanced, true);
   console.log('✓ A-1a : crédit vers wallet inexistant → lève, ledger rollback (0 orpheline), balanced');
 
-  // 8) DÉTECTION D'ORPHELIN (A-1b) : une ligne ledger sans wallet (corruption externe) EST rapportée
   await reset();
   await funding.open('u1', 100);
   await ds.query(

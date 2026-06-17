@@ -68,7 +68,6 @@ interface LoginBody {
   password?: unknown;
 }
 
-/** Endpoints d'authentification. `register`/`login` sont PUBLICS ; `me` exige un token (guard). */
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
@@ -87,7 +86,6 @@ export class AuthController {
     if (!username.trim() || !password) {
       throw new BadRequestException('username et password requis');
     }
-    // L'invariant « auto-inscription → PLAYER » est imposé DANS le use-case (défense en profondeur).
     return this.registerUser.execute({ username, password });
   }
 

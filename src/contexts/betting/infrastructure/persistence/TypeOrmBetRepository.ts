@@ -9,11 +9,6 @@ import { BetRecord } from './BetRecord';
 import { BetEventRecord } from './BetEventRecord';
 import { OutboxRecord } from './OutboxRecord';
 
-/**
- * Adapter Postgres. Mapping ORM↔domaine confiné ici (hexagonal). `save` écrit le snapshot,
- * APPEND les événements (journal) ET insère les lignes OUTBOX, dans UNE transaction (ambiante si
- * fournie par la UnitOfWork — BET-5). Donc un rollback n'écrit ni pari, ni event, ni outbox (BET-7).
- */
 export class TypeOrmBetRepository implements BetRepository {
   constructor(
     private readonly dataSource: DataSource,
@@ -51,7 +46,6 @@ export class TypeOrmBetRepository implements BetRepository {
         payload,
         occurredAt: event.occurredAt,
       });
-      // Transactional Outbox : même transaction que le pari/journal (ADR-008).
       await manager.insert(OutboxRecord, { id: randomUUID(), type: event.type, payload });
     }
   }

@@ -1,6 +1,5 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-/** Crée `wallet_operations` (garde-fou exactement-une-fois du crédit). Idempotente. */
 export class InitWalletOperations1718700000000 implements MigrationInterface {
   name = 'InitWalletOperations1718700000000';
 

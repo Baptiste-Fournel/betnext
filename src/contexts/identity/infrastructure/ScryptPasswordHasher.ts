@@ -6,11 +6,6 @@ const scryptAsync = promisify(scrypt);
 const KEY_LEN = 64;
 const SALT_LEN = 16;
 
-/**
- * Hachage de mot de passe via `scrypt` (Node natif, recommandé OWASP — pas de dépendance externe).
- * Format stocké : `scrypt$<saltHex>$<hashHex>`. `verify` à temps constant (`timingSafeEqual`).
- * Le mot de passe en clair n'est jamais conservé ni journalisé.
- */
 export class ScryptPasswordHasher implements PasswordHasher {
   async hash(plain: string): Promise<string> {
     const salt = randomBytes(SALT_LEN);
@@ -26,8 +21,6 @@ export class ScryptPasswordHasher implements PasswordHasher {
     const salt = Buffer.from(parts[1], 'hex');
     const expected = Buffer.from(parts[2], 'hex');
     if (salt.length === 0 || expected.length === 0) {
-      // Hash stocké dégénéré (hex invalide / vide) → refus systématique (sinon `timingSafeEqual`
-      // sur deux buffers vides renverrait true et accepterait n'importe quel mot de passe).
       return false;
     }
     const derived = (await scryptAsync(plain, salt, expected.length)) as Buffer;

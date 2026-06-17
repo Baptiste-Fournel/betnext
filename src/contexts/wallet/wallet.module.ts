@@ -16,12 +16,6 @@ import { InMemoryWalletAdapter } from './infrastructure/InMemoryWalletAdapter';
 import { ReconciliationController } from './infrastructure/http/ReconciliationController';
 import { WalletController } from './infrastructure/http/WalletController';
 
-/**
- * Contexte Wallet. Expose en GLOBAL les ports PARTAGÉS débit + crédit (Shared Kernel) : Betting les
- * consomme sans importer ce module. Postgres si DATABASE_URL, sinon un adapter en mémoire UNIQUE
- * partagé (même état) débit/crédit/ouverture/réconciliation. Le ledger `wallet_operations` journalise
- * TOUS les mouvements signés (BET-15) → la réconciliation vérifie Σ(ledger) == solde, intra-contexte.
- */
 @Global()
 @Module({
   controllers: [ReconciliationController, WalletController],
@@ -57,14 +51,12 @@ import { WalletController } from './infrastructure/http/WalletController';
       ],
     },
     {
-      // Ouverture/alimentation : adapter Postgres (tx autonome) ou l'instance mémoire partagée.
       provide: WALLET_FUNDING,
       useFactory: (memory: InMemoryWalletAdapter, dataSource?: DataSource): WalletFunding =>
         dataSource ? new TypeOrmWalletFundingAdapter(dataSource) : memory,
       inject: [InMemoryWalletAdapter, { token: getDataSourceToken(), optional: true }],
     },
     {
-      // Vue de réconciliation (lecture seule) : requête JOIN cohérente sur Postgres, ou l'état mémoire.
       provide: WALLET_LEDGER_VIEW,
       useFactory: (memory: InMemoryWalletAdapter, dataSource?: DataSource): WalletLedgerView =>
         dataSource ? new TypeOrmWalletReconciliationStore(dataSource) : memory,

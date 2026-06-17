@@ -7,10 +7,6 @@ import { InMemoryMarketCatalog } from './infrastructure/InMemoryMarketCatalog';
 import { TypeOrmMarketCatalog } from './infrastructure/persistence/TypeOrmMarketCatalog';
 import { CatalogController } from './infrastructure/http/CatalogController';
 
-/**
- * Contexte Catalog : marchés/événements (N-issues). Lecture + création. Postgres si
- * `DATABASE_URL` (catalogue persistant — BET-19), sinon en mémoire (tests / contract-gen).
- */
 @Module({
   controllers: [CatalogController],
   providers: [

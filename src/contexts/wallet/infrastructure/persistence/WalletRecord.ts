@@ -1,7 +1,6 @@
 import { Column, Entity, PrimaryColumn } from 'typeorm';
 import { numericTransformer } from './numeric.transformer';
 
-/** Solde du wallet, propriété du contexte Wallet. */
 @Entity('wallets')
 export class WalletRecord {
   @PrimaryColumn('varchar')

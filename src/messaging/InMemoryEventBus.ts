@@ -2,11 +2,6 @@ import { OutboxMessage, QueuePort } from './QueuePort';
 
 type Handler = (message: OutboxMessage) => Promise<void>;
 
-/**
- * Bus en mémoire (mono-process) pour prouver la boucle async SANS Redis (tests/POC). `publish`
- * attend chaque handler abonné → ordre déterministe. En production, le même contrat est porté par
- * BullMQ/Redis (cross-process). `publisherFor(topic)` expose un QueuePort réutilisable par le relais.
- */
 export class InMemoryEventBus {
   private readonly handlers = new Map<string, Handler[]>();
 

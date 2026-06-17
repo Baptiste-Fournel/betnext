@@ -4,7 +4,6 @@ import { DailyCapPolicy } from '../domain/DailyCapPolicy';
 import { ComplianceStore, DailyReservation } from './ports/ComplianceStore';
 import { DailyCapExceededError } from '../domain/DailyCapExceededError';
 
-/** Double inline (la couche application ne dépend pas d'un adapter d'infrastructure — frontière). */
 class FakeStore implements ComplianceStore {
   private readonly caps = new Map<string, number>();
   private readonly stakes = new Map<string, number>();

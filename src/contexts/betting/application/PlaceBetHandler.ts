@@ -3,7 +3,6 @@ import { PlaceBetCommand } from './PlaceBetCommand';
 import { IdempotentPlaceBet } from './IdempotentPlaceBet';
 import { PlaceBetOutput } from './PlaceBet';
 
-/** Adapter CQRS : délègue au use case idempotent (ADR-006, chemin d'écriture). */
 @CommandHandler(PlaceBetCommand)
 export class PlaceBetHandler implements ICommandHandler<PlaceBetCommand, PlaceBetOutput> {
   constructor(private readonly placeBet: IdempotentPlaceBet) {}

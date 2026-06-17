@@ -1,6 +1,5 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-/** Crée `processed_messages` (dé-doublonnage consommateur). Idempotente. */
 export class InitProcessedMessages1718500000000 implements MigrationInterface {
   name = 'InitProcessedMessages1718500000000';
 

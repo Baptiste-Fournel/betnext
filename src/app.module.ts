@@ -15,11 +15,6 @@ import { AuthModule } from './shared/auth/auth.module';
 import { HealthController } from './health/HealthController';
 import { DomainExceptionFilter } from './shared/http/DomainExceptionFilter';
 
-/**
- * Monolithe modulaire (ADR-001). PersistenceModule (Postgres si DATABASE_URL), MessagingModule
- * (relais Outbox au boot — BET-8), ReadModelModule (read-model cotes + projecteur OddsUpdated —
- * BET-10). Le filtre global mappe DomainError → HTTP (ADR-006).
- */
 @Module({
   imports: [
     PersistenceModule.forRoot(),

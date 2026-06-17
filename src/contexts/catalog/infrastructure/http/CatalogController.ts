@@ -42,7 +42,6 @@ class MarketDto {
   @ApiProperty({ type: [OutcomeDto] })
   outcomes!: OutcomeDto[];
 }
-/** Corps de création d'un marché (modèle GÉNÉRIQUE : N libellés d'issues, ≥ 2). */
 class CreateMarketRequest {
   @ApiProperty({ example: 'CS Major — NaVi vs Vitality' })
   name!: string;
@@ -58,11 +57,6 @@ interface CreateMarketBody {
   outcomes?: unknown;
 }
 
-/**
- * Catalog. CLASSIFICATION (BET-20) : GET /markets est PUBLIC (catalogue non user-spécifique) ;
- * POST /markets est réservé au rôle MANAGER (création par le gestionnaire). La cote courante se lit
- * via GET /odds/:id (public).
- */
 @ApiTags('catalog')
 @Controller('markets')
 export class CatalogController {

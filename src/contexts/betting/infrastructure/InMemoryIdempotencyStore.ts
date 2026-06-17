@@ -5,7 +5,6 @@ import {
   PlaceBetResult,
 } from '../application/ports/IdempotencyStore';
 
-/** Store en mémoire (mode sans DATABASE_URL). La concurrence réelle est prouvée sur Postgres. */
 export class InMemoryIdempotencyStore implements IdempotencyStore {
   private readonly store = new Map<string, IdempotencyEntry>();
 

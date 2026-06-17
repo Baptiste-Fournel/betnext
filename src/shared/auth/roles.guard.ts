@@ -8,10 +8,6 @@ interface RequestWithUser {
   user?: AuthUser;
 }
 
-/**
- * Autorisation par rôle. À utiliser APRÈS JwtAuthGuard (qui pose `req.user`). Si l'endpoint déclare
- * des rôles via @Roles et que l'utilisateur ne les a pas → 403. Sans @Roles → laisse passer.
- */
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}

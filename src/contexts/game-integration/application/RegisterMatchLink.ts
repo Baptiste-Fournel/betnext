@@ -10,10 +10,6 @@ export interface RegisterMatchLinkInput {
 
 const SIDES: readonly MatchOutcomeSide[] = ['HOME', 'AWAY', 'DRAW'];
 
-/**
- * Lie un match (externe) à un marché interne : ses issues + le mapping côté-vainqueur → issue. Valide
- * que le mapping ne référence que des issues du marché. Écriture NORMALE (pas d'argent).
- */
 export class RegisterMatchLink {
   constructor(private readonly links: MatchLinkStore) {}
 

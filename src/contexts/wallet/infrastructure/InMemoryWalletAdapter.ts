@@ -6,20 +6,6 @@ import { WalletLedgerView, WalletLedgerRow } from '../application/ports/WalletLe
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
-/**
- * Adapter en mémoire (mode sans DATABASE_URL / tests) : débit + crédit + ouverture + vue de
- * réconciliation partageant le MÊME état. C'est un **modèle de référence COHÉRENT** : chaque mutation
- * de solde enregistre un mouvement SIGNÉ déduplicé par opKey (mime la PK `wallet_operations`), si bien
- * que l'invariant Σ(mouvements) == solde tient **par construction** — ce modèle ne peut donc PAS
- * exhiber de dérive (la détection de dérive se prouve sur vrai Postgres : `reconciliation-pg`).
- *
- * Fidélité au chemin Postgres, avec une exception assumée :
- *  - CRÉDIT : refuse un wallet inexistant (lève) — miroir money-safety de l'adapter Postgres (BET-15) ;
- *  - DÉBIT : un wallet de **démo** touché sans ouverture explicite est seedé à `defaultBalance` AVEC son
- *    entrée d'ouverture (commodité de la démo sans `POST /wallet/open` ; sur Postgres l'ouverture est
- *    explicite). C'est la SEULE divergence, cantonnée au confort de démonstration.
- *  - débit et crédit sont exactement-une-fois (rejeu → no-op).
- */
 export class InMemoryWalletAdapter
   implements WalletDebitPort, WalletCreditPort, WalletFunding, WalletLedgerView
 {
@@ -31,7 +17,7 @@ export class InMemoryWalletAdapter
 
   async open(userId: string, openingBalance: number): Promise<boolean> {
     if (this.balances.has(userId)) {
-      return false; // déjà ouvert → no-op (idempotent)
+      return false;
     }
     this.balances.set(userId, round2(openingBalance));
     this.record(`opening:${userId}`, userId, openingBalance);
@@ -39,10 +25,10 @@ export class InMemoryWalletAdapter
   }
 
   async debit(userId: string, amount: number, operationRef: string): Promise<void> {
-    this.ensure(userId); // commodité démo : auto-ouverture du wallet joueur à defaultBalance
+    this.ensure(userId);
     const opKey = `stake:${operationRef}`;
     if (this.appliedOps.has(opKey)) {
-      return; // exactement-une-fois
+      return;
     }
     if (amount > this.balanceOf(userId)) {
       throw new DomainError('Insufficient balance');
@@ -53,10 +39,9 @@ export class InMemoryWalletAdapter
 
   async credit(userId: string, amount: number, opKey: string): Promise<void> {
     if (this.appliedOps.has(opKey)) {
-      return; // exactement-une-fois (miroir de l'INSERT ON CONFLICT)
+      return;
     }
     if (!this.balances.has(userId)) {
-      // miroir money-safety du chemin Postgres : pas de crédit vers un wallet inexistant
       throw new DomainError('Wallet introuvable pour le crédit');
     }
     this.balances.set(userId, round2(this.balanceOf(userId) + amount));
@@ -75,7 +60,6 @@ export class InMemoryWalletAdapter
     }));
   }
 
-  /** Seed paresseux d'un wallet de démo (defaultBalance) AVEC son entrée d'ouverture. */
   private ensure(userId: string): void {
     if (!this.balances.has(userId)) {
       this.balances.set(userId, round2(this.defaultBalance));

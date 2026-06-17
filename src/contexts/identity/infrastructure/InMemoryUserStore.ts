@@ -1,6 +1,5 @@
 import { StoredUser, UserStore } from '../application/ports/UserStore';
 
-/** Store en mémoire (mode sans DATABASE_URL / tests). Unicité du username comme en base. */
 export class InMemoryUserStore implements UserStore {
   private readonly byUsername = new Map<string, StoredUser>();
 

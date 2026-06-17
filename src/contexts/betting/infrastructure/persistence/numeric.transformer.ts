@@ -1,6 +1,5 @@
 import { ValueTransformer } from 'typeorm';
 
-/** Colonnes numeric : stockées exactes (argent/cote), relues en `number`. */
 export const numericTransformer: ValueTransformer = {
   to: (value?: number | null): number | null =>
     value === undefined || value === null ? null : value,

@@ -42,17 +42,12 @@ export const BETTING_TOKENS = {
   IdGenerator: Symbol('IdGenerator'),
 } as const;
 
-/**
- * @Global : expose le port partagé `MARKET_SETTLEMENT_PORT` (capacité de règlement) à TOUTE l'app —
- * Game Integration (BET-21) le consomme sans importer l'intérieur de Betting (frontière propre).
- */
 @Global()
 @Module({
   imports: [CqrsModule],
   controllers: [BettingController, SettlementController],
   providers: [
     {
-      // BET-10 : la cote COURANTE vient du read-model Redis (projection des OddsUpdated).
       provide: BETTING_TOKENS.OddsProvider,
       useFactory: (readModel: OddsReadModel): OddsProvider => new ReadModelOddsProvider(readModel),
       inject: [ODDS_READ_MODEL],
@@ -111,7 +106,6 @@ export const BETTING_TOKENS = {
       useFactory: (): SettlementStrategyFactory => new SettlementStrategyFactory(),
     },
     {
-      // BET-12 : règlement W/L/V via la couture Strategy, crédit exactement-une-fois.
       provide: SettleMarket,
       useFactory: (
         bets: BetRepository,
@@ -122,7 +116,6 @@ export const BETTING_TOKENS = {
       inject: [BET_REPOSITORY, WALLET_CREDIT_PORT, SettlementStrategyFactory, UNIT_OF_WORK],
     },
     {
-      // BET-21 : capacité de règlement exposée comme PORT PARTAGÉ (consommée par Game Integration).
       provide: MARKET_SETTLEMENT_PORT,
       useFactory: (commandBus: CommandBus): MarketSettlementPort =>
         new CommandBusMarketSettlement(commandBus),

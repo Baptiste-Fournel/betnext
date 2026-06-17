@@ -1,4 +1,3 @@
-/** Commande CQRS : régler un marché à sa clôture (résultat connu, ou annulation). */
 export class SettleMarketCommand {
   constructor(
     public readonly outcomes: string[],

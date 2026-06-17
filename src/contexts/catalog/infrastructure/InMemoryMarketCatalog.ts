@@ -1,10 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { CatalogMarket, MarketCatalog, NewMarket } from '../application/ports/MarketCatalog';
 
-/**
- * Catalogue en mémoire (POC). Seedé d'un marché à 3 issues (exemple) ; le gestionnaire peut en CRÉER
- * d'autres à N issues (modèle générique). La création assigne les identifiants (marché + issues).
- */
 export class InMemoryMarketCatalog implements MarketCatalog {
   private readonly markets: CatalogMarket[] = [
     {

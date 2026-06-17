@@ -1,6 +1,5 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-/** Tables du contexte Responsible Gaming : plafonds + ledger des mises du jour (enforcement). Idempotente. */
 export class InitCompliance1718900000000 implements MigrationInterface {
   name = 'InitCompliance1718900000000';
 

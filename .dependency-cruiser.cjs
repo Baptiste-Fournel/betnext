@@ -1,7 +1,3 @@
-/**
- * Frontières "ready-to-split" vérifiées au build (ADR-001 / ADR-008).
- * Toute violation casse la commande `npm run boundaries` (et donc la CI).
- */
 module.exports = {
   forbidden: [
     {
@@ -14,7 +10,7 @@ module.exports = {
       to: {
         path: '^src/contexts/([^/]+)/',
         pathNot: [
-          '^src/contexts/$1/', // même contexte autorisé
+          '^src/contexts/$1/',
         ],
       },
     },

@@ -17,7 +17,6 @@ import { JwtAuthGuard } from '../../../../shared/auth/jwt-auth.guard';
 import { RolesGuard } from '../../../../shared/auth/roles.guard';
 import { Roles } from '../../../../shared/auth/roles.decorator';
 
-/** Corps de règlement : toutes les issues du marché + l'issue gagnante (ou annulation). */
 class SettleMarketRequest {
   @ApiProperty({ type: [String], example: ['lol-finale-a', 'lol-finale-b', 'lol-finale-draw'] })
   outcomes!: string[];
@@ -28,7 +27,6 @@ class SettleMarketRequest {
   @ApiPropertyOptional({ example: 'WINNING_OUTCOME' })
   strategyKey?: string;
 }
-/** Résultat du règlement (comptes par statut + ids des paris en échec). */
 class SettleMarketResultDto {
   @ApiProperty({ example: 2 })
   settled!: number;
@@ -51,12 +49,6 @@ interface SettleBody {
   strategyKey?: unknown;
 }
 
-/**
- * Adapter HTTP de RÈGLEMENT, déclenché par le GESTIONNAIRE à la clôture d'un marché. Le front envoie
- * l'action (issue gagnante / annulation) ; le RÈGLEMENT (statuts, payout, events) reste dans le back
- * (BET-12). HYPOTHÈSE NON VALIDÉE (signalée) : résultat publié par le manager via cet endpoint ;
- * alternative = event Game Integration sur le bus (même couture SettleMarket).
- */
 @ApiTags('markets')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)

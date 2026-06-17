@@ -1,6 +1,5 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-/** Crée la table `wallets` (contexte Wallet). Idempotente. */
 export class InitWallet1718300000000 implements MigrationInterface {
   name = 'InitWallet1718300000000';
 

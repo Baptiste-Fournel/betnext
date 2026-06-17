@@ -19,21 +19,9 @@ export interface SettleMarketResult {
   won: number;
   lost: number;
   voided: number;
-  /** ids des paris dont le règlement a échoué → rejeu ciblé possible (observabilité). */
   failedBetIds: string[];
 }
 
-/**
- * Règle (ferme) un marché. Pour CHAQUE pari en attente d'une issue du marché, la STRATÉGIE décide
- * W/L/V (couture polymorphe réellement exercée), puis — dans UNE transaction PAR PARI — le pari est
- * marqué (event immuable BetWon/BetLost/BetVoided → l'historique montre posé → réglé) ET le wallet
- * crédité (gain à COTE FIGÉE, ou remboursement EXACT de la mise). Propriétés money (mêmes garanties
- * que le débit) :
- *  - ATOMIQUE par pari (marquer + event + crédit dans la même tx) ;
- *  - RÉSILIENT : l'échec d'un pari ne bloque pas les autres (try/catch par pari, pas de HOL blocking) ;
- *  - EXACTEMENT-UNE-FOIS : seuls les paris EN ATTENTE sont sélectionnés (rejeu → rien à régler) et le
- *    crédit est idempotent par opKey → rejouer le règlement laisse le solde IDENTIQUE.
- */
 export class SettleMarket {
   constructor(
     private readonly bets: BetRepository,
@@ -74,7 +62,6 @@ export class SettleMarket {
         result.lost += decision.kind === 'LOST' ? 1 : 0;
         result.voided += decision.kind === 'VOID' ? 1 : 0;
       } catch {
-        // résilience : un pari en échec n'empêche pas le règlement des autres (pas de HOL blocking)
         result.failed += 1;
         result.failedBetIds.push(bet.id);
       }

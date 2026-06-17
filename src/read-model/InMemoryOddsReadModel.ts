@@ -1,6 +1,5 @@
 import { OddsReadModel, OddsView } from './OddsReadModel';
 
-/** Read-model en mémoire (mode sans REDIS_URL / tests). Garde monotone par `occurredAt`. */
 export class InMemoryOddsReadModel implements OddsReadModel {
   private readonly odds = new Map<string, { odds: number; ts: number }>();
 

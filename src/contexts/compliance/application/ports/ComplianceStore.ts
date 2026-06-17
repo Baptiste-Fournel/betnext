@@ -5,15 +5,9 @@ export interface DailyReservation {
   dailyCap: number | null;
 }
 
-/**
- * Port de persistance du contexte Responsible Gaming (il POSSÈDE ces données). `loadForReserve`
- * VERROUILLE la ligne du jour (atomicité/anti-course) et renvoie total + plafond ; à appeler dans
- * la transaction ambiante de pose. `addStake` enregistre la mise réservée (total BRUT du jour).
- */
 export interface ComplianceStore {
   loadForReserve(userId: string, day: string): Promise<DailyReservation>;
   addStake(userId: string, day: string, stake: number): Promise<void>;
   setDailyCap(userId: string, cap: number): Promise<void>;
-  /** Plafond courant (null si non défini) — lecture pour l'écran responsible gaming. */
   currentCap(userId: string): Promise<number | null>;
 }

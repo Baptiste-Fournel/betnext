@@ -8,9 +8,6 @@ import { buildOpenApiConfig } from './openapi.config';
 async function bootstrap(): Promise<void> {
   const logger = new Logger('bootstrap');
 
-  // Postgres est le store PERSISTANT PAR DÉFAUT : l'app refuse de démarrer en mémoire (BET-19).
-  // Le mode en mémoire reste possible pour les tests / la génération de contrat (qui bootent
-  // AppModule directement, sans passer par ce point d'entrée).
   if (!process.env.DATABASE_URL) {
     logger.error(
       'DATABASE_URL manquant : BetNext tourne sur Postgres (store persistant). ' +
@@ -28,9 +25,9 @@ async function bootstrap(): Promise<void> {
   }
 
   const app = await NestFactory.create(AppModule);
-  app.enableCors(); // le front (Next.js) appelle l'API cross-origin
+  app.enableCors();
   const document = SwaggerModule.createDocument(app, buildOpenApiConfig());
-  SwaggerModule.setup('docs', app, document); // UI navigable: /docs ; spec brut: /docs-json
+  SwaggerModule.setup('docs', app, document);
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;
   await app.listen(port);
   logger.log(`BetNext démarré sur le port ${port} (Postgres).`);

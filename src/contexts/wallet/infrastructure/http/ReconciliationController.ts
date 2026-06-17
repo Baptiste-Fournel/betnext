@@ -38,11 +38,6 @@ class ReconciliationReportDto {
   drifts!: WalletDriftDto[];
 }
 
-/**
- * Réconciliation argent SUR DEMANDE (BET-15) — réservée au rôle **MANAGER** (BET-20) : le rapport
- * expose les soldes/écarts de TOUS les wallets (donnée sensible d'exploitation). Lecture seule,
- * idempotent, AUCUNE auto-correction.
- */
 @ApiTags('reconciliation')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)

@@ -17,16 +17,10 @@ import { TypeOrmComplianceStore } from './infrastructure/TypeOrmComplianceStore'
 import { InMemoryComplianceStore } from './infrastructure/InMemoryComplianceStore';
 import { ComplianceController } from './infrastructure/http/ComplianceController';
 
-/**
- * Contexte Responsible Gaming (ADR-010). Expose en GLOBAL le port partagé StakeGuardPort : Betting
- * le consomme sans importer ce module. Règles enfichables via le registre (DailyCapPolicy = 1re).
- * Postgres si DATABASE_URL, sinon en mémoire.
- */
 @Global()
 @Module({
   controllers: [ComplianceController],
   providers: [
-    // Point d'extension Open/Closed : ajouter une règle = un fichier de policy + 1 entrée ICI.
     { provide: COMPLIANCE_POLICIES, useFactory: (): CompliancePolicy[] => [new DailyCapPolicy()] },
     {
       provide: CompliancePolicyRegistry,

@@ -1,16 +1,10 @@
 import { RiotClient, RiotMatchPayload } from './RiotClient';
 
-/** Shape BRUTE Riot Match-V5 — confinée ICI (ne fuit nulle part ailleurs). */
 interface RawRiotMatchV5 {
   metadata?: { matchId?: string };
   info?: { teams?: Array<{ teamId?: number; win?: boolean }> };
 }
 
-/**
- * Client Riot RÉEL (run live uniquement). Clé via constructeur (issue de l'ENV, jamais en dur). 404 →
- * match pas disponible (payload `finished:false`, PAS une erreur → ne fait pas tripper le breaker) ;
- * 429/5xx/réseau → throw (retry + circuit breaker). N'est PAS exercé en CI (le stub l'est).
- */
 export class HttpRiotClient implements RiotClient {
   constructor(
     private readonly apiKey: string,

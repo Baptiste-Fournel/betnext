@@ -9,11 +9,6 @@ import { TransactionContext } from '../../../../persistence/TransactionContext';
 import { Bet } from '../../domain/Bet';
 import { Odds } from '../../../../shared-kernel/domain/Odds';
 
-// NB : pg-mem ne supporte ni plpgsql/triggers ni le rollback transactionnel. Le schéma de test
-// est créé par `synchronize` (entités). Donc : (a) l'append-only AU NIVEAU BASE (trigger de la
-// migration) et (b) l'isolation/rollback transactionnel sont garantis par Postgres au RUNTIME.
-// Ici on prouve ce qui est testable sur pg-mem : append-only AU NIVEAU ADAPTER (aucune mutation
-// des événements antérieurs) et propagation du manager de la UnitOfWork au repository.
 async function newDataSource(): Promise<DataSource> {
   const db = newDb();
   db.public.registerFunction({

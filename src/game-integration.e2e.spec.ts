@@ -4,11 +4,6 @@ import request from 'supertest';
 import { AppModule } from './app.module';
 import { TOKEN_SERVICE, TokenService } from './contexts/identity/application/ports/TokenService';
 
-/**
- * E2E intégration Riot (BET-21, mode mémoire, SANS clé → StubRiotClient). Prouve bout-à-bout :
- * lier un match ↔ marché → synchroniser → règlement AUTO du pari joueur, exactly-once au rejeu,
- * endpoints réservés au MANAGER. L'app démarre sans RIOT_API_KEY.
- */
 describe('BetNext intégration Riot (e2e, BET-21)', () => {
   let app: INestApplication;
   let playerTok = '';

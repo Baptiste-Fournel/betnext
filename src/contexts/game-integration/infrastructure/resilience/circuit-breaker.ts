@@ -1,4 +1,3 @@
-/** Levée quand le circuit est OUVERT : on échoue VITE sans appeler la dépendance en panne. */
 export class CircuitOpenError extends Error {
   constructor() {
     super('Circuit ouvert : appel court-circuité (dépendance en panne)');
@@ -9,19 +8,11 @@ export class CircuitOpenError extends Error {
 type State = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
 export interface CircuitBreakerOptions {
-  /** Nombre d'échecs consécutifs avant ouverture. */
   failureThreshold: number;
-  /** Durée (ms) avant de retenter (passage OPEN → HALF_OPEN). */
   resetTimeoutMs: number;
-  /** Horloge injectable (tests). */
   now?: () => number;
 }
 
-/**
- * Circuit Breaker (défi 3 sur dépendance externe). CLOSED : laisse passer ; après `failureThreshold`
- * échecs → OPEN (fail-fast immédiat, la dépendance n'est plus appelée). Après `resetTimeoutMs` → un
- * essai HALF_OPEN : succès → CLOSED, échec → OPEN. Implémentation maison (zéro dépendance, testable).
- */
 export class CircuitBreaker {
   private state: State = 'CLOSED';
   private failures = 0;
@@ -36,9 +27,9 @@ export class CircuitBreaker {
   async call<T>(fn: () => Promise<T>): Promise<T> {
     if (this.state === 'OPEN') {
       if (this.clock() - this.openedAt >= this.options.resetTimeoutMs) {
-        this.state = 'HALF_OPEN'; // on autorise UN essai de reprise
+        this.state = 'HALF_OPEN';
       } else {
-        throw new CircuitOpenError(); // fail-fast : aucun appel à la dépendance
+        throw new CircuitOpenError();
       }
     }
     try {

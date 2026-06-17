@@ -1,6 +1,5 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-/** Crée le snapshot `bets` + le journal append-only `bet_events`. Idempotente. */
 export class InitBetting1718200000000 implements MigrationInterface {
   name = 'InitBetting1718200000000';
 
@@ -30,7 +29,6 @@ export class InitBetting1718200000000 implements MigrationInterface {
     await queryRunner.query(
       `CREATE INDEX IF NOT EXISTS "idx_bet_events_betId" ON "bet_events" ("betId");`,
     );
-    // Append-only au niveau base : toute UPDATE/DELETE sur le journal est rejetée.
     await queryRunner.query(`
       CREATE OR REPLACE FUNCTION "betnext_bet_events_append_only"() RETURNS trigger AS $$
       BEGIN RAISE EXCEPTION 'bet_events is append-only'; END;

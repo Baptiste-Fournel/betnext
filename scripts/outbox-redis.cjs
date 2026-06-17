@@ -1,7 +1,4 @@
 /* eslint-disable */
-// E2E : outbox -> BullMQ -> consommateur sur un VRAI Redis. Postgres = embedded-postgres (in-process).
-// Tourne en CI (service redis) et en local (`docker compose up -d redis`). Sans REDIS_URL -> SKIP
-// (mon bac à sable ne peut pas télécharger un binaire Redis). Lancer : npm run test:outbox:redis
 require('reflect-metadata');
 const assert = require('node:assert');
 const { rmSync } = require('node:fs');
@@ -70,18 +67,15 @@ async function waitFor(cond, timeout) {
   const odds = { currentOdds: async () => ({ value: Odds.of(2), provisional: false }) };
   let n = 0; const ids = { next: () => `bet-${++n}` };
 
-  // 1) pari -> 1 ligne outbox (dans la tx) ; 2) relais -> file BullMQ
   await new PlaceBet(bets, odds, wallet, ids, uow).execute({ userId: 'u1', outcomeId: 'o1', stake: 10 });
   const published = await new OutboxRelay(ds, new BullMqQueueAdapter(queue)).publishPending();
   assert.ok(published >= 1, 'relais a publie au moins une ligne');
 
-  // 3) consommateur idempotent traite le job
   const worker = new OutboxConsumer('betnext-outbox', connection, new IdempotentMessageHandler(ds)).start();
   await waitFor(async () => (await ds.query('SELECT count(*)::int AS c FROM processed_messages'))[0].c >= 1, 8000);
   assert.strictEqual((await ds.query('SELECT count(*)::int AS c FROM processed_messages'))[0].c, 1);
   console.log('✓ outbox -> BullMQ -> consommateur : message traite une fois (vrai Redis)');
 
-  // 4) double-livraison du MEME message (meme jobId) -> consommateur idempotent -> toujours 1
   const row = (await ds.query('SELECT id, type, payload FROM outbox LIMIT 1'))[0];
   await new BullMqQueueAdapter(queue).enqueue({ id: row.id, type: row.type, payload: row.payload });
   await sleep(2000);

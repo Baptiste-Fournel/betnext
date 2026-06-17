@@ -1,10 +1,4 @@
 #!/usr/bin/env node
-/**
- * Garde de convention de nommage des tests (BET-26).
- * Tout libellé `it(...)` / `test(...)` d'un fichier `*.spec.ts` DOIT suivre `shouldXxxx_WhenXxxx`
- * (camelCase, un segment d'attendu + un segment de condition). Échoue le build sinon — la CI le
- * fait donc respecter au même titre que le lint et les frontières.
- */
 const { readdirSync, readFileSync, statSync } = require('fs');
 const { join } = require('path');
 

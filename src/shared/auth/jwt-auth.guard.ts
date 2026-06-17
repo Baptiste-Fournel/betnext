@@ -13,11 +13,6 @@ interface MutableRequest {
   user?: AuthUser;
 }
 
-/**
- * Authentification au BORD HTTP : extrait le token `Authorization: Bearer <token>`, le VÉRIFIE via le
- * port partagé (impl Identity), et pose `{userId, role}` sur la requête. Aucune connaissance de
- * l'intérieur d'Identity → frontières propres. 401 si token absent/invalide/expiré.
- */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(@Inject(TOKEN_VERIFIER) private readonly tokens: TokenVerifierPort) {}

@@ -15,7 +15,6 @@ import { JwtAuthGuard } from '../../../../shared/auth/jwt-auth.guard';
 import { CurrentUser } from '../../../../shared/auth/current-user.decorator';
 import { AuthUser } from '../../../../shared/auth/auth-user';
 
-/** Plafond quotidien du joueur (Responsible Gaming). `dailyCap` null = aucun plafond défini. */
 class DailyCapDto {
   @ApiProperty({ example: 'demo-player' })
   userId!: string;
@@ -28,7 +27,6 @@ class DailyCapDto {
   dailyCap!: number | null;
 }
 
-/** Corps de PUT /responsible-gaming/daily-cap : le cap seulement (le userId vient du token). */
 class SetDailyCapRequest {
   @ApiProperty({ example: 50, minimum: 0, description: 'Plafond quotidien (> 0)' })
   cap!: number;
@@ -38,11 +36,6 @@ interface CapBody {
   cap?: unknown;
 }
 
-/**
- * Adapter HTTP (BET-20) : AUTHENTIFIÉ. Le joueur consulte (GET) et définit (PUT) SON PROPRE plafond.
- * Le `userId` vient TOUJOURS du token (jamais du corps/query) → un joueur ne peut agir que sur son
- * propre plafond (pas d'IDOR).
- */
 @ApiTags('responsible-gaming')
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({ description: 'Token Bearer requis/invalide' })

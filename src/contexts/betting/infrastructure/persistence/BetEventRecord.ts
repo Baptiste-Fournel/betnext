@@ -1,6 +1,5 @@
 import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
-/** Journal APPEND-ONLY des transitions du pari (ES ciblé Bet — ADR-005). Insertions uniquement. */
 @Entity('bet_events')
 export class BetEventRecord {
   @PrimaryGeneratedColumn({ type: 'bigint' })

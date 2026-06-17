@@ -1,7 +1,6 @@
 import { Column, Entity, PrimaryColumn } from 'typeorm';
 import { numericTransformer } from './numeric.transformer';
 
-/** Clé d'idempotence HTTP + hash du corps + résultat figé (betId/cote/gain). PK = garde-fou concurrent. */
 @Entity('idempotency_keys')
 export class IdempotencyKeyRecord {
   @PrimaryColumn('varchar')
