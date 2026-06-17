@@ -1,5 +1,5 @@
-import { Module } from '@nestjs/common';
-import { CqrsModule } from '@nestjs/cqrs';
+import { Global, Module } from '@nestjs/common';
+import { CommandBus, CqrsModule } from '@nestjs/cqrs';
 import { getDataSourceToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { PlaceBet } from './application/PlaceBet';
@@ -31,12 +31,22 @@ import { ReadModelOddsProvider } from './infrastructure/ReadModelOddsProvider';
 import { UuidIdGenerator } from './infrastructure/UuidIdGenerator';
 import { BettingController } from './infrastructure/http/BettingController';
 import { SettlementController } from './infrastructure/http/SettlementController';
+import {
+  MARKET_SETTLEMENT_PORT,
+  MarketSettlementPort,
+} from '../../shared-kernel/ports/MarketSettlementPort';
+import { CommandBusMarketSettlement } from './infrastructure/CommandBusMarketSettlement';
 
 export const BETTING_TOKENS = {
   OddsProvider: Symbol('OddsProvider'),
   IdGenerator: Symbol('IdGenerator'),
 } as const;
 
+/**
+ * @Global : expose le port partagé `MARKET_SETTLEMENT_PORT` (capacité de règlement) à TOUTE l'app —
+ * Game Integration (BET-21) le consomme sans importer l'intérieur de Betting (frontière propre).
+ */
+@Global()
 @Module({
   imports: [CqrsModule],
   controllers: [BettingController, SettlementController],
@@ -111,12 +121,19 @@ export const BETTING_TOKENS = {
       ): SettleMarket => new SettleMarket(bets, credit, factory, uow),
       inject: [BET_REPOSITORY, WALLET_CREDIT_PORT, SettlementStrategyFactory, UNIT_OF_WORK],
     },
+    {
+      // BET-21 : capacité de règlement exposée comme PORT PARTAGÉ (consommée par Game Integration).
+      provide: MARKET_SETTLEMENT_PORT,
+      useFactory: (commandBus: CommandBus): MarketSettlementPort =>
+        new CommandBusMarketSettlement(commandBus),
+      inject: [CommandBus],
+    },
     PlaceBetHandler,
     GetBetHandler,
     ListBetsHandler,
     GetBetHistoryHandler,
     SettleMarketHandler,
   ],
-  exports: [PlaceBet, IdempotentPlaceBet, SettleMarket],
+  exports: [PlaceBet, IdempotentPlaceBet, SettleMarket, MARKET_SETTLEMENT_PORT],
 })
 export class BettingModule {}

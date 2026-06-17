@@ -607,6 +607,92 @@
           "auth"
         ]
       }
+    },
+    "/game-integration/matches": {
+      "post": {
+        "operationId": "GameIntegrationController_link",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterMatchLinkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lien match↔marché enregistré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchLinkDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide (matchId/outcomes/mapping)"
+          },
+          "401": {
+            "description": "Token Bearer requis/invalide"
+          },
+          "403": {
+            "description": "Réservé au rôle MANAGER"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "game-integration"
+        ]
+      }
+    },
+    "/game-integration/matches/{matchId}/sync": {
+      "post": {
+        "operationId": "GameIntegrationController_sync",
+        "parameters": [
+          {
+            "name": "matchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Résultat synchronisé (réglé si match fini)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token Bearer requis/invalide"
+          },
+          "403": {
+            "description": "Réservé au rôle MANAGER"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "game-integration"
+        ]
+      }
     }
   },
   "info": {
@@ -1176,6 +1262,145 @@
         "required": [
           "userId",
           "role"
+        ]
+      },
+      "OutcomeMappingDto": {
+        "type": "object",
+        "properties": {
+          "HOME": {
+            "type": "string",
+            "example": "mkt-demo-lol-1",
+            "description": "issue gagnante si HOME gagne"
+          },
+          "AWAY": {
+            "type": "string",
+            "example": "mkt-demo-lol-2",
+            "description": "issue gagnante si AWAY gagne"
+          },
+          "DRAW": {
+            "type": "string",
+            "example": "mkt-demo-lol-3",
+            "description": "issue si match nul (sinon annulé)"
+          }
+        }
+      },
+      "RegisterMatchLinkRequest": {
+        "type": "object",
+        "properties": {
+          "matchId": {
+            "type": "string",
+            "example": "EUW1_1234567890"
+          },
+          "outcomes": {
+            "example": [
+              "mkt-demo-lol-1",
+              "mkt-demo-lol-2",
+              "mkt-demo-lol-3"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/OutcomeMappingDto"
+          }
+        },
+        "required": [
+          "matchId",
+          "outcomes",
+          "mapping"
+        ]
+      },
+      "MatchLinkDto": {
+        "type": "object",
+        "properties": {
+          "matchId": {
+            "type": "string",
+            "example": "EUW1_1234567890"
+          },
+          "outcomes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/OutcomeMappingDto"
+          }
+        },
+        "required": [
+          "matchId",
+          "outcomes",
+          "mapping"
+        ]
+      },
+      "SettlementSummaryDto": {
+        "type": "object",
+        "properties": {
+          "settled": {
+            "type": "number",
+            "example": 1
+          },
+          "won": {
+            "type": "number",
+            "example": 1
+          },
+          "lost": {
+            "type": "number",
+            "example": 0
+          },
+          "voided": {
+            "type": "number",
+            "example": 0
+          },
+          "failed": {
+            "type": "number",
+            "example": 0
+          }
+        },
+        "required": [
+          "settled",
+          "won",
+          "lost",
+          "voided",
+          "failed"
+        ]
+      },
+      "SyncResultDto": {
+        "type": "object",
+        "properties": {
+          "matchId": {
+            "type": "string",
+            "example": "EUW1_1234567890"
+          },
+          "status": {
+            "type": "string",
+            "example": "SETTLED",
+            "enum": [
+              "PENDING",
+              "SETTLED"
+            ]
+          },
+          "resolution": {
+            "type": "string",
+            "example": "WON_OUTCOME",
+            "enum": [
+              "WON_OUTCOME",
+              "VOIDED"
+            ]
+          },
+          "winningOutcomeId": {
+            "type": "string",
+            "example": "mkt-demo-lol-1"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/SettlementSummaryDto"
+          }
+        },
+        "required": [
+          "matchId",
+          "status"
         ]
       }
     }

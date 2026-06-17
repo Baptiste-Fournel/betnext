@@ -10,6 +10,7 @@ import { WalletModule } from './contexts/wallet/wallet.module';
 import { CatalogModule } from './contexts/catalog/catalog.module';
 import { ComplianceModule } from './contexts/compliance/compliance.module';
 import { IdentityModule } from './contexts/identity/identity.module';
+import { GameIntegrationModule } from './contexts/game-integration/game-integration.module';
 import { AuthModule } from './shared/auth/auth.module';
 import { HealthController } from './health/HealthController';
 import { DomainExceptionFilter } from './shared/http/DomainExceptionFilter';
@@ -31,6 +32,7 @@ import { DomainExceptionFilter } from './shared/http/DomainExceptionFilter';
     CatalogModule,
     ComplianceModule,
     IdentityModule,
+    GameIntegrationModule,
     AuthModule,
   ],
   controllers: [HealthController],

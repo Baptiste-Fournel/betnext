@@ -228,6 +228,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/game-integration/matches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["GameIntegrationController_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/game-integration/matches/{matchId}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["GameIntegrationController_sync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -468,6 +500,71 @@ export interface components {
             userId: string;
             /** @example PLAYER */
             role: string;
+        };
+        OutcomeMappingDto: {
+            /**
+             * @description issue gagnante si HOME gagne
+             * @example mkt-demo-lol-1
+             */
+            HOME?: string;
+            /**
+             * @description issue gagnante si AWAY gagne
+             * @example mkt-demo-lol-2
+             */
+            AWAY?: string;
+            /**
+             * @description issue si match nul (sinon annulé)
+             * @example mkt-demo-lol-3
+             */
+            DRAW?: string;
+        };
+        RegisterMatchLinkRequest: {
+            /** @example EUW1_1234567890 */
+            matchId: string;
+            /**
+             * @example [
+             *       "mkt-demo-lol-1",
+             *       "mkt-demo-lol-2",
+             *       "mkt-demo-lol-3"
+             *     ]
+             */
+            outcomes: string[];
+            mapping: components["schemas"]["OutcomeMappingDto"];
+        };
+        MatchLinkDto: {
+            /** @example EUW1_1234567890 */
+            matchId: string;
+            outcomes: string[];
+            mapping: components["schemas"]["OutcomeMappingDto"];
+        };
+        SettlementSummaryDto: {
+            /** @example 1 */
+            settled: number;
+            /** @example 1 */
+            won: number;
+            /** @example 0 */
+            lost: number;
+            /** @example 0 */
+            voided: number;
+            /** @example 0 */
+            failed: number;
+        };
+        SyncResultDto: {
+            /** @example EUW1_1234567890 */
+            matchId: string;
+            /**
+             * @example SETTLED
+             * @enum {string}
+             */
+            status: "PENDING" | "SETTLED";
+            /**
+             * @example WON_OUTCOME
+             * @enum {string}
+             */
+            resolution?: "WON_OUTCOME" | "VOIDED";
+            /** @example mkt-demo-lol-1 */
+            winningOutcomeId?: string;
+            summary?: components["schemas"]["SettlementSummaryDto"];
         };
     };
     responses: never;
@@ -1037,6 +1134,87 @@ export interface operations {
             };
             /** @description Token Bearer requis/invalide */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    GameIntegrationController_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterMatchLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Lien match↔marché enregistré */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchLinkDto"];
+                };
+            };
+            /** @description Corps invalide (matchId/outcomes/mapping) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token Bearer requis/invalide */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Réservé au rôle MANAGER */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    GameIntegrationController_sync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                matchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Résultat synchronisé (réglé si match fini) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncResultDto"];
+                };
+            };
+            /** @description Token Bearer requis/invalide */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Réservé au rôle MANAGER */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
