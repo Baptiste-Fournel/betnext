@@ -544,8 +544,19 @@ la main.
   jamais de bascule live→fixtures côté résultats (on ne règle pas sur de fausses données) ; source
   down → `PENDING`, on réessaie. Résilience timeout/retry/circuit-breaker + **rate-limit léger**.
   En mode fixtures, un match **déjà terminé** (G2 vs Fnatic) prouve le règlement auto en démo.
+- **Rafraîchissement auto** (BET-33) : un **scheduler léger** (`EsportsFeedScheduler`, adapter
+  entrant « horloge ») rend l'app **vivante** façon Winamax — périodiquement et **sans clic**, il
+  ré-ingère les matchs à venir puis synchronise les résultats. Il ne fait que **déclencher les use
+  cases existants** (ingestion idempotente + règlement **exactly-once**) : **aucune logique money
+  ajoutée**, pas de double-règlement. Implémenté sur le cycle de vie Nest
+  (`OnApplicationBootstrap`/`OnModuleDestroy` + `setInterval`, idiome de l'`OutboxDispatcher` — **zéro
+  nouvelle dépendance**). Gardes : **gate ENV** `ESPORTS_SCHEDULER_ENABLED` (**OFF par défaut → jamais
+  armé en test/CI** ni sans opt-in), intervalle `ESPORTS_SCHEDULER_INTERVAL_MS` (défaut 5 min) +
+  rate-limit propre à la synchro résultats, **anti-chevauchement** (un tick lent ne se superpose pas)
+  et **isolation des erreurs** (feed down → run journalisé, l'app ne crashe pas, le tick suivant
+  réessaie). Pas de nouvel endpoint exposé → **zéro drift de contrat**.
 
-Voir **ADR-016** et **ADR-017**.
+Voir **ADR-016**, **ADR-017** et **ADR-018**.
 
 ## Cotes d'ouverture — source unique (BET-28)
 

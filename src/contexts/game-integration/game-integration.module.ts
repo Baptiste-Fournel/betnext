@@ -30,9 +30,20 @@ import { ResilientGameProvider } from './infrastructure/esports/ResilientGamePro
 import { EsportsIngestionController } from './infrastructure/http/EsportsIngestionController';
 import { EsportsResultsController } from './infrastructure/http/EsportsResultsController';
 import { UpcomingMatchesController } from './infrastructure/http/UpcomingMatchesController';
+import { EsportsFeedScheduler } from './infrastructure/scheduler/EsportsFeedScheduler';
 
 const esportsConfigured = (): boolean =>
   Boolean(process.env.ESPORTS_API_BASE_URL && process.env.ESPORTS_API_KEY);
+
+// Rafraîchissement auto (BET-33), OFF par défaut → jamais armé en test/CI ni sans opt-in explicite.
+const schedulerEnabled = (): boolean =>
+  ['1', 'true', 'yes', 'on'].includes((process.env.ESPORTS_SCHEDULER_ENABLED ?? '').toLowerCase());
+
+// Intervalle « quelques minutes » par défaut (5 min). Valeur invalide/absente → défaut sûr.
+const schedulerIntervalMs = (): number => {
+  const raw = Number(process.env.ESPORTS_SCHEDULER_INTERVAL_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : 300_000;
+};
 
 @Module({
   controllers: [EsportsIngestionController, EsportsResultsController, UpcomingMatchesController],
@@ -116,6 +127,19 @@ const esportsConfigured = (): boolean =>
         return new SyncFeedResults(store, settler, { minIntervalMs });
       },
       inject: [MATCH_LINK_STORE, SyncMatchResult],
+    },
+    // --- Rafraîchissement auto du feed (BET-33) ---
+    // Déclencheur temporel : ré-ingère les matchs à venir + synchronise les résultats sans clic.
+    // Ne fait QUE rappeler les use cases ci-dessus (idempotent + exactly-once) — zéro logique
+    // money. Gate ENV `ESPORTS_SCHEDULER_ENABLED` (OFF par défaut → inerte en test/CI/démo).
+    {
+      provide: EsportsFeedScheduler,
+      useFactory: (ingest: IngestUpcomingMatches, results: SyncFeedResults): EsportsFeedScheduler =>
+        new EsportsFeedScheduler(ingest, results, {
+          enabled: schedulerEnabled(),
+          intervalMs: schedulerIntervalMs(),
+        }),
+      inject: [IngestUpcomingMatches, SyncFeedResults],
     },
   ],
 })

@@ -443,6 +443,46 @@ hors calibrage POC → un endpoint MANAGER + poll léger (rate-limit) suffit.
 
 ---
 
+### ADR-018 — Rafraîchissement auto du feed : scheduler léger sur le cycle de vie Nest (BET-33)
+
+**Décision.** Rendre l'app **vivante** (façon Winamax) sans clic : un **scheduler léger**
+`EsportsFeedScheduler` — **adapter entrant « horloge »**, au même titre qu'un controller est un
+adapter « requête » (donc rangé en `infrastructure/scheduler`, pas en `application`) — déclenche
+**périodiquement** les use cases **existants** : (1) `IngestUpcomingMatches` (ingestion idempotente)
+puis (2) `SyncFeedResults` (règlement **exactly-once**). Implémenté sur le **cycle de vie Nest**
+(`OnApplicationBootstrap` arme un `setInterval`, `OnModuleDestroy` le coupe) — **idiome déjà en place**
+de l'`OutboxDispatcher`, donc **zéro nouvelle dépendance**. **Gate ENV** `ESPORTS_SCHEDULER_ENABLED`
+(**OFF par défaut** → inerte en test/CI/démo et sans opt-in : le scheduler ne tape **jamais** l'API
+externe pendant les tests), intervalle `ESPORTS_SCHEDULER_INTERVAL_MS` (défaut **5 min**, valeur
+invalide → défaut). Robustesse : **anti-chevauchement** (drapeau `running` → un tick lent ne se
+superpose pas), **isolation des erreurs** (chaque étape en `try/catch` → feed down = run journalisé,
+l'app ne crashe pas, le tick suivant réessaie, jamais de rejet sur le `void` du timer).
+
+**Alternatives écartées.** (a) *`@nestjs/schedule` (`@Interval`/`@Cron`)* : plus idiomatique mais
+**nouvelle dépendance** pour un `setInterval` — écartée vu l'**incident d'install (FUSE)** connu et le
+fait que le projet a **déjà** son idiome de tâche de fond éprouvé et testé (`OutboxDispatcher`). À
+reconsidérer si plusieurs tâches cron riches apparaissent. (b) *Scheduler ACTIF par défaut* :
+**inacceptable** — taperait l'API externe en test/CI et au moindre démarrage ; d'où l'OFF par défaut.
+(c) *Endpoint de statut dédié* : non livré (pas de besoin démo) → **aucun nouvel endpoint, zéro drift
+de contrat**. (d) *Nouveau garde de rate-limit* : inutile — on **réutilise** le min-interval déjà
+porté par `SyncFeedResults` ; l'intervalle scheduler (minutes) borne l'ingestion.
+
+**Compromis.**
+- **Gain** : démo « vivante » sans intervention ; **aucune logique money ajoutée** (le scheduler ne
+  fait que *déclencher* l'idempotent + l'exactly-once → pas de double-règlement possible) ; pas de
+  dépendance ; testable sans réseau (`runOnce()` pur + fake timers).
+- **Perte** : `setInterval` à la main (pas de syntaxe cron riche) ; intervalle fixe par instance ;
+  multi-instances feraient tourner N schedulers (acceptable : ingestion idempotente + règlement
+  exactly-once absorbent les doublons — un seul opt-in en POC).
+- **Condition** : reste **OFF par défaut** (jamais en test/CI) ; n'appelle **que** des use cases
+  existants ; tout échec est isolé et ne bloque pas les runs suivants ; secrets en ENV.
+
+**Ancrage.** `src/contexts/game-integration/infrastructure/scheduler/EsportsFeedScheduler.ts`
+(+ `.spec.ts`), câblage `game-integration.module.ts`, ENV `ESPORTS_SCHEDULER_ENABLED` /
+`ESPORTS_SCHEDULER_INTERVAL_MS`. Idiome repris de `src/messaging/OutboxDispatcher.ts`.
+
+---
+
 ## 4. Risques résiduels & questions probables du jury
 
 ### 4.1 Risques résiduels (fragile / à valider)
