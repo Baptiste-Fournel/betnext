@@ -35,3 +35,24 @@ export class IngestSummaryDto {
   @ApiProperty({ type: [String], description: 'ids des marchés créés' })
   marketIds!: string[];
 }
+
+export class SyncResultsSummaryDto {
+  @ApiProperty({ example: false, description: 'true si court-circuité par le rate-limit léger' })
+  throttled!: boolean;
+  @ApiProperty({ example: 8, description: 'matchs ingérés inspectés' })
+  checked!: number;
+  @ApiProperty({ example: 1, description: 'matchs terminés (résultat connu)' })
+  finished!: number;
+  @ApiProperty({ example: 7, description: 'matchs encore à venir / sans résultat' })
+  pending!: number;
+  @ApiProperty({ example: 0, description: 'matchs en échec de récupération (réessayables)' })
+  failed!: number;
+  @ApiProperty({ example: 3, description: 'paris réglés CE run (0 au rejeu → exactly-once)' })
+  settledBets!: number;
+  @ApiProperty({ example: 2, description: 'paris gagnants réglés ce run' })
+  won!: number;
+  @ApiProperty({ example: 1, description: 'paris perdants réglés ce run' })
+  lost!: number;
+  @ApiProperty({ example: 0, description: 'paris annulés (remboursés) ce run' })
+  voided!: number;
+}

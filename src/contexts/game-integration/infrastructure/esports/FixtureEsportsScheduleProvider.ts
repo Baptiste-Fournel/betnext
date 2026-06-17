@@ -15,12 +15,15 @@ export class FixtureEsportsScheduleProvider implements EsportsScheduleProvider {
     const inDays = (days: number): string => new Date(base + days * 86_400_000).toISOString();
     const matches: ScheduledMatch[] = [
       {
+        // Match « récemment terminé » : sert la PREUVE du règlement auto en démo
+        // (cf. FixtureEsportsResultProvider → G2 gagne). Les vrais matchs à venir ne finissent
+        // pas pendant la soutenance, d'où ce fixture déjà joué et réglable immédiatement.
         externalId: 'esports-fixture-lec-g2-fnc',
         game: 'LoL',
         league: 'LEC',
         teamA: 'G2 Esports',
         teamB: 'Fnatic',
-        startTime: inDays(1),
+        startTime: inDays(-1),
       },
       {
         externalId: 'esports-fixture-lck-t1-geng',

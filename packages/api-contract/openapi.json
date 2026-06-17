@@ -666,6 +666,38 @@
         ]
       }
     },
+    "/game-integration/esports/sync-results": {
+      "post": {
+        "operationId": "EsportsResultsController_syncResults",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Récupère les résultats des matchs ingérés terminés et règle marchés + paris (exactly-once : un rejeu ne re-crédite pas). Rate-limit léger côté serveur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResultsSummaryDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token Bearer requis/invalide"
+          },
+          "403": {
+            "description": "Réservé au rôle MANAGER"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "game-integration"
+        ]
+      }
+    },
     "/game-integration/upcoming": {
       "get": {
         "operationId": "UpcomingMatchesController_list",
@@ -1368,6 +1400,67 @@
           "skipped",
           "failed",
           "marketIds"
+        ]
+      },
+      "SyncResultsSummaryDto": {
+        "type": "object",
+        "properties": {
+          "throttled": {
+            "type": "boolean",
+            "example": false,
+            "description": "true si court-circuité par le rate-limit léger"
+          },
+          "checked": {
+            "type": "number",
+            "example": 8,
+            "description": "matchs ingérés inspectés"
+          },
+          "finished": {
+            "type": "number",
+            "example": 1,
+            "description": "matchs terminés (résultat connu)"
+          },
+          "pending": {
+            "type": "number",
+            "example": 7,
+            "description": "matchs encore à venir / sans résultat"
+          },
+          "failed": {
+            "type": "number",
+            "example": 0,
+            "description": "matchs en échec de récupération (réessayables)"
+          },
+          "settledBets": {
+            "type": "number",
+            "example": 3,
+            "description": "paris réglés CE run (0 au rejeu → exactly-once)"
+          },
+          "won": {
+            "type": "number",
+            "example": 2,
+            "description": "paris gagnants réglés ce run"
+          },
+          "lost": {
+            "type": "number",
+            "example": 1,
+            "description": "paris perdants réglés ce run"
+          },
+          "voided": {
+            "type": "number",
+            "example": 0,
+            "description": "paris annulés (remboursés) ce run"
+          }
+        },
+        "required": [
+          "throttled",
+          "checked",
+          "finished",
+          "pending",
+          "failed",
+          "settledBets",
+          "won",
+          "lost",
+          "voided"
         ]
       },
       "UpcomingMatchDto": {

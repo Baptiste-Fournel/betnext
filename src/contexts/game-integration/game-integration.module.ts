@@ -17,22 +17,25 @@ import { IngestMatchMarket } from './application/IngestMatchMarket';
 import { ListUpcomingMatches } from './application/ListUpcomingMatches';
 import { IngestUpcomingMatches } from './application/IngestUpcomingMatches';
 import { SyncMatchResult } from './application/SyncMatchResult';
+import { SyncFeedResults } from './application/SyncFeedResults';
 import { InMemoryMatchLinkStore } from './infrastructure/InMemoryMatchLinkStore';
-import { RIOT_CLIENT, RiotClient } from './infrastructure/riot/RiotClient';
-import { HttpRiotClient } from './infrastructure/riot/HttpRiotClient';
-import { StubRiotClient } from './infrastructure/riot/StubRiotClient';
-import { ResilientRiotClient } from './infrastructure/riot/ResilientRiotClient';
 import { CircuitBreaker } from './infrastructure/resilience/circuit-breaker';
-import { RiotGameProvider } from './infrastructure/RiotGameProvider';
 import { LolEsportsScheduleProvider } from './infrastructure/esports/LolEsportsScheduleProvider';
 import { FixtureEsportsScheduleProvider } from './infrastructure/esports/FixtureEsportsScheduleProvider';
 import { ResilientScheduleProvider } from './infrastructure/esports/ResilientScheduleProvider';
 import { FallbackEsportsScheduleProvider } from './infrastructure/esports/FallbackEsportsScheduleProvider';
+import { EsportsResultProvider } from './infrastructure/esports/EsportsResultProvider';
+import { FixtureEsportsResultProvider } from './infrastructure/esports/FixtureEsportsResultProvider';
+import { ResilientGameProvider } from './infrastructure/esports/ResilientGameProvider';
 import { EsportsIngestionController } from './infrastructure/http/EsportsIngestionController';
+import { EsportsResultsController } from './infrastructure/http/EsportsResultsController';
 import { UpcomingMatchesController } from './infrastructure/http/UpcomingMatchesController';
 
+const esportsConfigured = (): boolean =>
+  Boolean(process.env.ESPORTS_API_BASE_URL && process.env.ESPORTS_API_KEY);
+
 @Module({
-  controllers: [EsportsIngestionController, UpcomingMatchesController],
+  controllers: [EsportsIngestionController, EsportsResultsController, UpcomingMatchesController],
   providers: [
     { provide: MATCH_LINK_STORE, useFactory: (): MatchLinkStore => new InMemoryMatchLinkStore() },
     {
@@ -53,13 +56,14 @@ import { UpcomingMatchesController } from './infrastructure/http/UpcomingMatches
       provide: ESPORTS_SCHEDULE_PROVIDER,
       useFactory: (): EsportsScheduleProvider => {
         const fixtures = new FixtureEsportsScheduleProvider();
-        const baseUrl = process.env.ESPORTS_API_BASE_URL;
-        const apiKey = process.env.ESPORTS_API_KEY;
-        if (!baseUrl || !apiKey) {
+        if (!esportsConfigured()) {
           return fixtures;
         }
         const live = new ResilientScheduleProvider(
-          new LolEsportsScheduleProvider(baseUrl, apiKey),
+          new LolEsportsScheduleProvider(
+            process.env.ESPORTS_API_BASE_URL!,
+            process.env.ESPORTS_API_KEY!,
+          ),
           { timeoutMs: 4_000, retries: 2, baseDelayMs: 300 },
         );
         return new FallbackEsportsScheduleProvider(live, fixtures);
@@ -74,26 +78,26 @@ import { UpcomingMatchesController } from './infrastructure/http/UpcomingMatches
       ): IngestUpcomingMatches => new IngestUpcomingMatches(schedule, ingestMatch, store),
       inject: [ESPORTS_SCHEDULE_PROVIDER, IngestMatchMarket, MATCH_LINK_STORE],
     },
-    // --- Moteur de règlement-par-résultat (ACL + exactly-once) ---
-    // Conservé et câblé, PRÊT pour le futur driver « résultats esports auto » (ticket suivant)
-    // qui le déclenchera. Pas d'endpoint manuel ici (flux featured/sync manuel retiré).
-    {
-      provide: RIOT_CLIENT,
-      useFactory: (): RiotClient => {
-        const key = process.env.RIOT_API_KEY;
-        const base: RiotClient = key ? new HttpRiotClient(key) : new StubRiotClient();
-        const breaker = new CircuitBreaker({ failureThreshold: 5, resetTimeoutMs: 30_000 });
-        return new ResilientRiotClient(base, breaker, {
-          timeoutMs: 2_000,
-          retries: 2,
-          baseDelayMs: 200,
-        });
-      },
-    },
+    // --- Règlement-par-résultat auto (BET-32) ---
+    // ACL résultats : source live durcie (timeout/retry/circuit breaker) si configurée, sinon
+    // fixtures déterministes (tests/démo). PAS de bascule live→fixtures : on ne règle JAMAIS sur
+    // de fausses données (money-safety) — source down → PENDING, on réessaie plus tard.
     {
       provide: GAME_PROVIDER,
-      useFactory: (client: RiotClient): GameProvider => new RiotGameProvider(client),
-      inject: [RIOT_CLIENT],
+      useFactory: (): GameProvider => {
+        if (!esportsConfigured()) {
+          return new FixtureEsportsResultProvider();
+        }
+        const breaker = new CircuitBreaker({ failureThreshold: 5, resetTimeoutMs: 30_000 });
+        return new ResilientGameProvider(
+          new EsportsResultProvider(
+            process.env.ESPORTS_API_BASE_URL!,
+            process.env.ESPORTS_API_KEY!,
+          ),
+          breaker,
+          { timeoutMs: 4_000, retries: 2, baseDelayMs: 300 },
+        );
+      },
     },
     {
       provide: SyncMatchResult,
@@ -103,6 +107,15 @@ import { UpcomingMatchesController } from './infrastructure/http/UpcomingMatches
         settlement: MarketSettlementPort,
       ): SyncMatchResult => new SyncMatchResult(provider, store, settlement),
       inject: [GAME_PROVIDER, MATCH_LINK_STORE, MARKET_SETTLEMENT_PORT],
+    },
+    {
+      provide: SyncFeedResults,
+      useFactory: (store: MatchLinkStore, settler: SyncMatchResult): SyncFeedResults => {
+        const raw = Number(process.env.ESPORTS_SYNC_MIN_INTERVAL_MS);
+        const minIntervalMs = Number.isFinite(raw) && raw >= 0 ? raw : 3_000;
+        return new SyncFeedResults(store, settler, { minIntervalMs });
+      },
+      inject: [MATCH_LINK_STORE, SyncMatchResult],
     },
   ],
 })

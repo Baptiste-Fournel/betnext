@@ -373,8 +373,8 @@ absente de l'URL).
   sans toucher le domaine ; ingestion sûre (idempotente, non bloquante) ; money-path intact ;
   surface réduite (deux sources claires, une seule voie de résolution).
 - **Perte** : idempotence garantie **au sein d'une instance** (lien match↔marché en mémoire) — un
-  redémarrage + re-pull peut recréer des marchés en BDD ; le **driver de règlement auto** du feed =
-  **ticket suivant** (le moteur est prêt, le déclencheur reste à écrire).
+  redémarrage + re-pull peut recréer des marchés en BDD ; le **driver de règlement auto** du feed
+  est livré en **BET-32** (cf. ADR-017).
 - **Condition** : tout format externe reste **confiné à l'adapter** ; base URL + clé en ENV ;
   aucune cote externe ; la résolution passe **toujours** par le moteur exactly-once
   (`MarketSettlementPort` / BET-12).
@@ -383,6 +383,46 @@ absente de l'URL).
 `.../application/IngestUpcomingMatches.ts`,
 `.../infrastructure/esports/{LolEsportsScheduleProvider,FixtureEsportsScheduleProvider,ResilientScheduleProvider,FallbackEsportsScheduleProvider}.ts`,
 endpoint `POST /game-integration/esports/ingest`, ENV `ESPORTS_API_BASE_URL` / `ESPORTS_API_KEY`.
+
+---
+
+### ADR-017 — Résultats auto du feed → règlement **exactly-once** : ACL résultats LoL Esports sur le port `GameProvider` (BET-32)
+
+**Décision.** Le règlement des marchés du feed est **automatisé** en réutilisant le moteur
+exactly-once déjà câblé. Un **adapter de résultats** `EsportsResultProvider` implémente le port
+existant **`GameProvider`** (`fetchMatchReport(matchId) → MatchReport`) : il interroge LoL Esports
+`getEventDetails`, détecte la fin de match (une équipe atteint `floor(strategy.count/2)+1`
+victoires) et projette le **côté gagnant par index** (`teams[0]=HOME`, `teams[1]=AWAY`). Cet ordre
+est **identique à celui de `getSchedule`** consommé à l'ingestion (vérifié empiriquement), donc le
+côté s'aligne sur le **mapping côté→issue** posé sur le lien. Le déclencheur `SyncFeedResults`
+*(MANAGER, `POST /game-integration/esports/sync-results`)* parcourt les liens ingérés, appelle
+`SyncMatchResult` (→ `MarketSettlementPort` → `SettleMarket`) et agrège un résumé. L'ACL résultat
+remplace l'ancien adapter **Riot Match-V5** (placeholder BET-21, désormais **retiré** car orphelin)
+sur le **même port** — zéro changement du moteur. Sélection **live/fixtures par ENV**, symétrique à
+l'ingestion ; en mode fixtures, un match **déjà terminé** (G2 vs Fnatic) rend le règlement auto
+**démontrable** (les vrais matchs à venir ne finissent pas en soutenance). Résilience
+timeout/retry/circuit-breaker + **rate-limit léger** (intervalle min).
+
+**Alternatives écartées.** (a) *Bascule live→fixtures côté résultats (comme l'ingestion)* :
+réglerait des paris sur de **fausses données** → **faille money-safety** ; rejeté — source down →
+`PENDING`, on réessaie (jamais de règlement sur données douteuses ; formes imprévues → `PENDING`).
+(b) *Mapping gagnant→côté par identité d'équipe stockée sur le lien* : plus robuste mais plus
+lourd ; l'ordre `getSchedule`/`getEventDetails` étant **vérifié constant** (même source) et gardé
+(exactement 2 équipes, exactement 1 gagnant), l'index suffit. (c) *Scheduler/cron lourd* :
+hors calibrage POC → un endpoint MANAGER + poll léger (rate-limit) suffit.
+
+**Compromis.**
+- **Gain** : boucle « comme Winamax » bouclée (pari → résultat → réglé) ; **exactly-once** réutilisé
+  tel quel (rejeu = no-op, prouvé en e2e) ; ACL swappable sur un port stable ; aucune dette (l'ancien
+  ACL Riot orphelin est supprimé).
+- **Perte** : mapping par **index** (dépend de l'ordre source, vérifié + gardé) ; règlement
+  **déclenché** (manuel/poll), pas temps réel ; idempotence des liens intra-instance (cf. ADR-016).
+- **Condition** : jamais de règlement sur des résultats non-live ; tout passe par le moteur
+  exactly-once ; clé en ENV ; tout cas ambigu/incomplet → `PENDING` (money-safety d'abord).
+
+**Ancrage.** `src/contexts/game-integration/infrastructure/esports/{EsportsResultProvider,FixtureEsportsResultProvider,ResilientGameProvider}.ts`,
+`.../application/SyncFeedResults.ts`, `.../application/SyncMatchResult.ts`,
+`.../infrastructure/http/EsportsResultsController.ts`, ENV `ESPORTS_SYNC_MIN_INTERVAL_MS`.
 
 ---
 

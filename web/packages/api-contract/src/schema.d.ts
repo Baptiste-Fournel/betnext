@@ -260,6 +260,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/game-integration/esports/sync-results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EsportsResultsController_syncResults"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/game-integration/upcoming": {
         parameters: {
             query?: never;
@@ -593,6 +609,53 @@ export interface components {
             failed: number;
             /** @description ids des marchés créés */
             marketIds: string[];
+        };
+        SyncResultsSummaryDto: {
+            /**
+             * @description true si court-circuité par le rate-limit léger
+             * @example false
+             */
+            throttled: boolean;
+            /**
+             * @description matchs ingérés inspectés
+             * @example 8
+             */
+            checked: number;
+            /**
+             * @description matchs terminés (résultat connu)
+             * @example 1
+             */
+            finished: number;
+            /**
+             * @description matchs encore à venir / sans résultat
+             * @example 7
+             */
+            pending: number;
+            /**
+             * @description matchs en échec de récupération (réessayables)
+             * @example 0
+             */
+            failed: number;
+            /**
+             * @description paris réglés CE run (0 au rejeu → exactly-once)
+             * @example 3
+             */
+            settledBets: number;
+            /**
+             * @description paris gagnants réglés ce run
+             * @example 2
+             */
+            won: number;
+            /**
+             * @description paris perdants réglés ce run
+             * @example 1
+             */
+            lost: number;
+            /**
+             * @description paris annulés (remboursés) ce run
+             * @example 0
+             */
+            voided: number;
         };
         UpcomingMatchDto: {
             /**
@@ -1227,6 +1290,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IngestSummaryDto"];
+                };
+            };
+            /** @description Token Bearer requis/invalide */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Réservé au rôle MANAGER */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EsportsResultsController_syncResults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Récupère les résultats des matchs ingérés terminés et règle marchés + paris (exactly-once : un rejeu ne re-crédite pas). Rate-limit léger côté serveur. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncResultsSummaryDto"];
                 };
             };
             /** @description Token Bearer requis/invalide */

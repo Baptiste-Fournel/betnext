@@ -143,6 +143,7 @@ curl -X POST http://localhost:3000/bets \
 | `POST /wallet/open` *(M)*, `GET /admin/reconciliation` *(M)* | MANAGER | Wallet |
 | `GET /game-integration/upcoming` | public | Game Integration (BET-30) |
 | `POST /game-integration/esports/ingest` *(M)* | MANAGER | Game Integration (BET-30) |
+| `POST /game-integration/esports/sync-results` *(M)* | MANAGER | Game Integration (BET-32) |
 
 > La cote affichée et la cote figée au pari proviennent désormais d'une **source unique** :
 > le read-model Redis (alimenté par Pricing), et la **cote d'ouverture** partagée
@@ -475,17 +476,17 @@ l'identité courante. Deux rôles : **`PLAYER`** et **`MANAGER`**.
 > L'autorité reste **100 % serveur** : le scoping par rôle côté front (`<AppShell>`) n'est
 > qu'une UX ; un client forgé n'obtient que des 401/403 du back.
 
-## Game Integration — feed des matchs LoL pro à venir (BET-30)
+## Game Integration — feed des matchs LoL pro à venir + résultats auto (BET-30, BET-32)
 
 Deux sources de marchés alimentent la plateforme : (1) l'**ajout manuel** par le gestionnaire
 (« Ouvrir un marché » → Catalog/`CreateMarket`) et (2) le **feed auto** des matchs LoL pro à
 venir (ci-dessous). Le contexte **Game Integration** ne connaît ni Catalog ni Betting en
 direct : il passe par les **ports du Shared Kernel** (`MarketCreationPort`, `MarketSettlementPort`).
-La **résolution** d'un marché se fait pour l'instant **manuellement** par le gestionnaire
-(« Régler un marché » = BET-12). Le **moteur de règlement-par-résultat exactly-once**
-(`SyncMatchResult` + ACL résultat + `MarketSettlementPort`) est **conservé et câblé**, prêt pour
-le futur **driver « résultats esports auto »** (ticket suivant) — seuls les flux *featured par ID*
-et *sync manuel* de BET-21/29 (UI/endpoints) ont été retirés.
+La **résolution** des marchés du feed est désormais **automatique** (BET-32) : on récupère le
+résultat des matchs terminés (ACL résultats LoL Esports) et on règle marchés + paris
+**exactly-once** via le moteur `SyncMatchResult` → `MarketSettlementPort` → `SettleMarket`. Le
+règlement **manuel** (« Régler un marché » = BET-12) reste disponible pour les marchés ouverts à
+la main.
 
 - **Feed matchs pro à venir** : `POST /game-integration/esports/ingest` *(MANAGER)* ingère les
   **gros matchs LoL pro à venir** (LEC/LCK/LPL/MSI…) en marchés bettables. Source derrière un
@@ -500,13 +501,17 @@ et *sync manuel* de BET-21/29 (UI/endpoints) ont été retirés.
   (→ `MarketCreationPort` + lien match↔marché, clé = id externe). Un re-pull ne duplique pas
   les marchés. **Cotes = notre pricing** (cote d'ouverture BET-28 + volume ; aucune cote
   externe). `GET /game-integration/upcoming` (public) sert au joueur le **badge ligue + kickoff**.
-  Le lien porte le **mapping côté→issue**, prêt à être réglé par résultat.
-- **Moteur de règlement conservé** : `SyncMatchResult` (résultat → règlement exactly-once via
-  `MarketSettlementPort`, ACL résultat derrière `GameProvider`) reste **câblé mais dormant** — pas
-  d'endpoint manuel. Le futur driver « résultats esports auto » le déclenchera pour régler les
-  paris du feed automatiquement.
+  Le lien porte le **mapping côté→issue**, consommé au règlement.
+- **Résultats auto + règlement** (BET-32) : `POST /game-integration/esports/sync-results` *(MANAGER)*
+  → `SyncFeedResults` parcourt les matchs ingérés, va chercher le résultat via l'**ACL résultats**
+  (`EsportsResultProvider` → LoL Esports `getEventDetails` ; équipe gagnante → côté **par index**,
+  ordre vérifié identique à l'ingestion → issue gagnante via le mapping du lien) et déclenche
+  `SyncMatchResult` → règlement **exactly-once** (rejeu = no-op, pas de double-crédit). **Money-safety** :
+  jamais de bascule live→fixtures côté résultats (on ne règle pas sur de fausses données) ; source
+  down → `PENDING`, on réessaie. Résilience timeout/retry/circuit-breaker + **rate-limit léger**.
+  En mode fixtures, un match **déjà terminé** (G2 vs Fnatic) prouve le règlement auto en démo.
 
-Voir **ADR-016**.
+Voir **ADR-016** et **ADR-017**.
 
 ## Cotes d'ouverture — source unique (BET-28)
 
@@ -620,10 +625,10 @@ correction, idempotence, multi-wallets) + non-régression `test:atomicity:pg` (d
 `RolesGuard`) + **scoping anti-IDOR** (`userId` issu du token ; paris non possédés → 404) ;
 vérification de token via port partagé `TokenVerifierPort`.
 
-**BET-21** : **Game Integration / Riot** — le **moteur de règlement-par-résultat** (`SyncMatchResult`
-+ ACL résultat derrière `GameProvider` + `MarketSettlementPort`, exactly-once) est **conservé et
-câblé** (dormant), prêt pour le futur driver « résultats esports auto ». Seuls l'**endpoint/UI de
-sync manuel** a été retiré au recentrage BET-30.
+**BET-21** : **Game Integration** — le **moteur de règlement-par-résultat** (`SyncMatchResult` +
+`MarketSettlementPort`, exactly-once) est en place ; son ACL résultat est désormais l'**ACL LoL
+Esports** (BET-32). L'ancien ACL Riot Match-V5 (placeholder) a été **retiré** (remplacé par
+`EsportsResultProvider`, qui implémente le même port `GameProvider`).
 
 **BET-22 livré** : front scindé en **deux apps Next.js** (joueur :3001 / admin :3002) +
 packages partagés (`@betnext/ui`, `@betnext/api-contract`) ; ESLint des apps autonome en CI.
@@ -649,5 +654,12 @@ de règlement, lui, est conservé (cf. BET-21 ci-dessus).
 un **ACL** `EsportsScheduleProvider` + adapter **fixtures** de repli) ingérés en marchés bettables
 (`POST /game-integration/esports/ingest` *MANAGER*, brique `IngestMatchMarket` → `MarketCreationPort`)
 — **idempotent**, **non bloquant** (repli auto + `source` live/fixtures), **cotes = notre pricing** ;
-UI joueur `GET /game-integration/upcoming` avec **badge ligue + kickoff**. Résolution **manuelle**
-des marchés (BET-12), money-path inchangé. Voir **ADR-016**.
+UI joueur `GET /game-integration/upcoming` avec **badge ligue + kickoff**. Voir **ADR-016**.
+
+**BET-32 livré** : **résultats auto du feed → règlement auto**. ACL résultats
+(`EsportsResultProvider` → LoL Esports `getEventDetails`, + fixtures déterministes) implémentant
+`GameProvider` ; `POST /game-integration/esports/sync-results` *(MANAGER)* → `SyncFeedResults`
+règle marchés + paris **exactly-once** (rejeu = no-op, prouvé en e2e). **Money-safety** : aucune
+bascule sur de fausses données (source down → `PENDING`) ; résilience timeout/retry/circuit-breaker
++ rate-limit léger. Bouton admin « Synchroniser les résultats » ; les paris passent Gagné/Perdu.
+Un fixture **déjà terminé** prouve le règlement auto en démo. Voir **ADR-017**.
