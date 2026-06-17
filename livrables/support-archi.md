@@ -50,15 +50,14 @@ Formation développeurs — partie architecture (≈ 20 min)
 **7 contextes implémentés** + un Shared Kernel :
 
 `Identity` (auth/RBAC) · `Wallet` · `Compliance` (Responsible Gaming) · `Catalog` ·
-`Betting` · `Pricing` · `Game Integration` (ACL Riot)
+`Betting` · `Pricing` · `Game Integration` (ACL LoL Esports)
 
 - Communication **inter-contexte par ports + événements** (Shared Kernel + Outbox/bus),
   **jamais** par import direct (`dependency-cruiser`, 0 violation).
 - Coutures clés : `Wallet*Port`, `StakeGuardPort`, `MarketCreationPort`, `MarketSettlementPort`,
-  `TokenVerifierPort`.
-- *(conçu, non implémenté : Stripe / paiement externe — Saga stretch.)*
+  `TokenVerifierPort`, `PaymentGateway`, `GameProvider`.
 
-<!-- 4:30 — Montrer src/contexts/. Honnêteté : 7 contextes réels sur infra réelle. Seul Stripe reste conçu. On ne survend pas. -->
+<!-- 4:30 — Montrer src/contexts/. Honnêteté : 7 contextes réels sur infra réelle. On ne survend pas. -->
 
 ---
 
@@ -152,12 +151,12 @@ Formation développeurs — partie architecture (≈ 20 min)
 - **Niveau 1 — aujourd'hui, zéro code** : un « jeu » = un attribut ; créer son marché N-issues via
   `POST /markets`. Cotes, pose, règlement W/L/V : **génériques**, fonctionnent tels quels.
 - **Niveau 2 — nouveau type de pari** : +1 `SettlementStrategy` enregistrée.
-- **Niveau 3 — ingestion auto fournisseur** (`GameProvider`/ACL) : **implémenté pour Riot**
-  (BET-21/29) — featuring d'un match en un geste (`MarketCreationPort` → Catalog) + settlement
-  live (`MarketSettlementPort` → Betting). Un **nouveau** fournisseur = un adapter `GameProvider`
-  + son ACL, sans toucher le cœur.
+- **Niveau 3 — ingestion auto fournisseur** (`GameProvider`/ACL) : **implémenté pour LoL Esports**
+  (BET-30/32) — feed des matchs pro à venir (`MarketCreationPort` → Catalog) + **règlement auto**
+  sur résultats (`MarketSettlementPort` → Betting, exactly-once). Un **nouveau** fournisseur = un
+  adapter `EsportsScheduleProvider`/`GameProvider` + son ACL, sans toucher le cœur.
 
-<!-- 21:00 — Renvoyer à l'atelier M8. Honnêteté : Riot est branché (ACL + résilience). Ajouter un AUTRE fournisseur = un adapter de plus. -->
+<!-- 21:00 — Renvoyer à l'atelier M8. Honnêteté : LoL Esports est branché (ACL + résilience + repli fixtures). Ajouter un AUTRE fournisseur = un adapter de plus. -->
 
 ---
 
@@ -165,14 +164,16 @@ Formation développeurs — partie architecture (≈ 20 min)
 
 | Prouvé (tests réels) | Conçu, non implémenté |
 | --- | --- |
-| Atomicité argent (PG, 18 cas) | Stripe / paiement externe (Saga stretch) |
-| Réconciliation Σ=solde (PG) | `BetTypeStrategy` au **placement** + payout `PARTIAL` |
-| Cote async + idempotence (Redis) | Pricing **multi-marchés** simultanés (totaux par issue) |
-| Frontières (boundaries CI, 0 violation) | — |
+| Atomicité argent (PG, 18 cas) | `BetTypeStrategy` au **placement** + payout `PARTIAL` |
+| Réconciliation Σ=solde (PG) | Pricing **multi-marchés** simultanés (totaux par issue) |
+| Cote async + idempotence (Redis) | — |
+| Frontières (boundaries CI, 0 violation) | |
 | Auth JWT + RBAC + anti-IDOR (BET-20) | |
-| Game Integration / Riot : ACL + résilience (BET-21/29) | |
+| Game Integration / LoL Esports : feed + règlement auto (BET-30/32) | |
+| Dépôt Stripe : Saga + compensation + Circuit Breaker (BET-17) | |
+| Settlement : 2 stratégies réelles (`WINNING_OUTCOME` + `EXACT_SCORE`) | |
 
-<!-- 22:00 — Message de clôture : la valeur du POC = savoir distinguer prouvé / conçu / à faire. C'est ça, la posture d'architecte. Identity et Game Integration sont passés du "conçu" au "prouvé". -->
+<!-- 22:00 — Message de clôture : la valeur du POC = savoir distinguer prouvé / conçu / à faire. C'est ça, la posture d'architecte. Identity, Game Integration et Stripe sont passés du "conçu" au "prouvé" ; ne restent conçus que le placement par type de pari et le pricing multi-marchés. -->
 
 ---
 
