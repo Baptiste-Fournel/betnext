@@ -2,8 +2,8 @@ import {
   EsportsSchedule,
   EsportsScheduleProvider,
 } from '../../application/ports/EsportsScheduleProvider';
-import { withRetry } from '../resilience/with-retry';
-import { withTimeout } from '../resilience/with-timeout';
+import { withRetry } from '../../../../shared/resilience/with-retry';
+import { withTimeout } from '../../../../shared/resilience/with-timeout';
 
 export interface ScheduleResilienceOptions {
   timeoutMs: number;

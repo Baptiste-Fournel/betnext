@@ -1,8 +1,8 @@
 import { GameProvider } from '../../application/ports/GameProvider';
 import { MatchReport } from '../../domain/MatchReport';
-import { CircuitBreaker } from '../resilience/circuit-breaker';
-import { withRetry } from '../resilience/with-retry';
-import { withTimeout } from '../resilience/with-timeout';
+import { CircuitBreaker } from '../../../../shared/resilience/circuit-breaker';
+import { withRetry } from '../../../../shared/resilience/with-retry';
+import { withTimeout } from '../../../../shared/resilience/with-timeout';
 
 export interface GameProviderResilienceOptions {
   timeoutMs: number;

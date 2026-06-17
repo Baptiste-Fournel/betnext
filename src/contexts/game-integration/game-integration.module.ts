@@ -19,7 +19,7 @@ import { IngestUpcomingMatches } from './application/IngestUpcomingMatches';
 import { SyncMatchResult } from './application/SyncMatchResult';
 import { SyncFeedResults } from './application/SyncFeedResults';
 import { InMemoryMatchLinkStore } from './infrastructure/InMemoryMatchLinkStore';
-import { CircuitBreaker } from './infrastructure/resilience/circuit-breaker';
+import { CircuitBreaker } from '../../shared/resilience/circuit-breaker';
 import { LolEsportsScheduleProvider } from './infrastructure/esports/LolEsportsScheduleProvider';
 import { FixtureEsportsScheduleProvider } from './infrastructure/esports/FixtureEsportsScheduleProvider';
 import { ResilientScheduleProvider } from './infrastructure/esports/ResilientScheduleProvider';

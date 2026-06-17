@@ -1,7 +1,7 @@
 import { ResilientGameProvider } from './ResilientGameProvider';
 import { GameProvider } from '../../application/ports/GameProvider';
 import { MatchReport } from '../../domain/MatchReport';
-import { CircuitBreaker, CircuitOpenError } from '../resilience/circuit-breaker';
+import { CircuitBreaker, CircuitOpenError } from '../../../../shared/resilience/circuit-breaker';
 
 const finished: MatchReport = { matchId: 'm', status: 'FINISHED', winner: 'HOME' };
 
