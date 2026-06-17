@@ -53,7 +53,8 @@ describe('TypeOrmBetRepository (pg-mem)', () => {
     }
   });
 
-  it("persiste lockedOdds ET potentialGain figés, relus À L'IDENTIQUE", async () => {
+  it('shouldPersistAndReloadLockedOddsAndPotentialGainIdentically_WhenBetSaved', async () => {
+    // Arrange
     const bet = Bet.place({
       id: 'b1',
       userId: 'u1',
@@ -61,17 +62,20 @@ describe('TypeOrmBetRepository (pg-mem)', () => {
       stake: 20,
       currentOdds: Odds.of(2.5),
     });
-    await repo.save(bet);
 
+    // Act
+    await repo.save(bet);
     const reloaded = await repo.findById('b1');
+
+    // Assert
     expect(reloaded).not.toBeNull();
     expect(reloaded!.lockedOdds.value).toBe(2.5);
     expect(reloaded!.potentialGain).toBe(50);
     expect(reloaded!.stake).toBe(20);
   });
 
-  it('relit potentialGain depuis la COLONNE (preuve : aucun recalcul stake×cote)', async () => {
-    // Snapshot dont le potentialGain stocké DIFFÈRE de stake×cote (10×2=20).
+  it('shouldReadPotentialGainFromColumnWithoutRecomputing_WhenStoredValueDiffersFromStakeTimesOdds', async () => {
+    // Arrange
     await ds.getRepository(BetRecord).insert({
       id: 'bx',
       userId: 'u1',
@@ -82,11 +86,16 @@ describe('TypeOrmBetRepository (pg-mem)', () => {
       status: 'PENDING',
       createdAt: new Date(),
     });
+
+    // Act
     const reloaded = await repo.findById('bx');
-    expect(reloaded!.potentialGain).toBe(999); // la valeur stockée, pas 20
+
+    // Assert
+    expect(reloaded!.potentialGain).toBe(999);
   });
 
-  it('journalise BetPlaced dans le journal append-only', async () => {
+  it('shouldAppendBetPlacedToJournal_WhenBetSaved', async () => {
+    // Arrange
     const bet = Bet.place({
       id: 'b2',
       userId: 'u1',
@@ -94,14 +103,18 @@ describe('TypeOrmBetRepository (pg-mem)', () => {
       stake: 10,
       currentOdds: Odds.of(2),
     });
-    await repo.save(bet);
 
+    // Act
+    await repo.save(bet);
     const history = await repo.history('b2');
+
+    // Assert
     expect(history.map((e) => e.type)).toEqual(['BetPlaced']);
     expect(history[0].payload).toMatchObject({ outcomeId: 'o1', stake: 10, lockedOdds: 2 });
   });
 
-  it('APPEND strict : une transition ajoute un événement SANS muter les précédents', async () => {
+  it('shouldAppendEventWithoutMutatingPrevious_WhenTransitionOccurs', async () => {
+    // Arrange
     const bet = Bet.place({
       id: 'b3',
       userId: 'u1',
@@ -114,9 +127,11 @@ describe('TypeOrmBetRepository (pg-mem)', () => {
     expect(afterFirst).toHaveLength(1);
     const firstEvent = afterFirst[0];
 
+    // Act
     bet.win();
     await repo.save(bet);
 
+    // Assert
     const afterSecond = await repo.history('b3');
     expect(afterSecond.map((e) => e.type)).toEqual(['BetPlaced', 'BetWon']);
     expect(afterSecond[0].seq).toBe(firstEvent.seq);
@@ -127,7 +142,8 @@ describe('TypeOrmBetRepository (pg-mem)', () => {
     expect(reloaded!.lockedOdds.value).toBe(2);
   });
 
-  it('couture BET-5 : save REJOINT la transaction de la UnitOfWork (manager propagé + commit)', async () => {
+  it('shouldJoinUnitOfWorkTransactionAndCommit_WhenSaveRunsInsideTransaction', async () => {
+    // Arrange
     const uow = new TypeOrmUnitOfWork(ds, context);
     const bet = Bet.place({
       id: 'b4',
@@ -137,14 +153,16 @@ describe('TypeOrmBetRepository (pg-mem)', () => {
       currentOdds: Odds.of(2),
     });
 
+    // Act
     let managerPropagated = false;
     await uow.withTransaction(async () => {
-      managerPropagated = context.getManager() !== undefined; // la UoW publie son manager
-      await repo.save(bet); // le repo le récupère et rejoint la transaction
+      managerPropagated = context.getManager() !== undefined;
+      await repo.save(bet);
     });
 
+    // Assert
     expect(managerPropagated).toBe(true);
-    expect(context.getManager()).toBeUndefined(); // contexte nettoyé après la transaction
+    expect(context.getManager()).toBeUndefined();
     const reloaded = await repo.findById('b4');
     expect(reloaded).not.toBeNull();
     expect((await repo.history('b4')).map((e) => e.type)).toEqual(['BetPlaced']);

@@ -38,24 +38,36 @@ const betOf = (userId: string): Bet =>
   });
 
 describe('GetBetHandler (read-your-writes, cote figée, scoping anti-IDOR)', () => {
-  it('le propriétaire voit la vue avec sa cote FIGÉE (snapshot)', async () => {
-    const view = await new GetBetHandler(new StubBetRepository(betOf('u1'))).execute(
-      new GetBetQuery('bet-1', 'u1'),
-    );
+  it('shouldReturnViewWithLockedOdds_WhenOwnerQueriesOwnBet', async () => {
+    // Arrange
+    const handler = new GetBetHandler(new StubBetRepository(betOf('u1')));
+
+    // Act
+    const view = await handler.execute(new GetBetQuery('bet-1', 'u1'));
+
+    // Assert
     expect(view).toMatchObject({ betId: 'bet-1', lockedOdds: 2, potentialGain: 40, stake: 20 });
   });
 
-  it('un AUTRE utilisateur → null (anti-IDOR, indistinct de l’inexistant)', async () => {
-    const view = await new GetBetHandler(new StubBetRepository(betOf('u1'))).execute(
-      new GetBetQuery('bet-1', 'attacker'),
-    );
+  it('shouldReturnNull_WhenAnotherUserQueriesBet', async () => {
+    // Arrange
+    const handler = new GetBetHandler(new StubBetRepository(betOf('u1')));
+
+    // Act
+    const view = await handler.execute(new GetBetQuery('bet-1', 'attacker'));
+
+    // Assert
     expect(view).toBeNull();
   });
 
-  it('pari inconnu → null', async () => {
-    const view = await new GetBetHandler(new StubBetRepository(null)).execute(
-      new GetBetQuery('x', 'u1'),
-    );
+  it('shouldReturnNull_WhenBetUnknown', async () => {
+    // Arrange
+    const handler = new GetBetHandler(new StubBetRepository(null));
+
+    // Act
+    const view = await handler.execute(new GetBetQuery('x', 'u1'));
+
+    // Assert
     expect(view).toBeNull();
   });
 });

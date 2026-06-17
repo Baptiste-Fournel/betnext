@@ -11,31 +11,42 @@ const base = () => ({
 });
 
 describe('Bet (agrégat)', () => {
-  it('fige la cote à la pose : un mouvement de marché ultérieur ne change pas le pari', () => {
+  it('shouldKeepLockedOdds_WhenMarketMovesAfterPlacement', () => {
+    // Arrange
     const bet = Bet.place(base());
     expect(bet.lockedOdds.value).toBe(2);
     expect(bet.potentialGain).toBe(20);
 
-    // le marché bouge plus tard...
+    // Act
     const movedMarket = Odds.of(3.5);
-    // ...mais le pari déjà posé est inchangé
+
+    // Assert
     expect(bet.lockedOdds.value).toBe(2);
     expect(movedMarket.value).toBe(3.5);
   });
 
-  it('refuse une mise non strictement positive', () => {
+  it('shouldThrow_WhenStakeNotStrictlyPositive', () => {
+    // Act / Assert
     expect(() => Bet.place({ ...base(), stake: 0 })).toThrow();
   });
 
-  it('émet un événement BetPlaced à la pose', () => {
+  it('shouldEmitBetPlacedEvent_WhenPlaced', () => {
+    // Act
     const events = Bet.place(base()).pullEvents();
+
+    // Assert
     expect(events.map((e) => e.type)).toEqual(['BetPlaced']);
   });
 
-  it('passe de PENDING à WON et garde les transitions illégales', () => {
+  it('shouldTransitionToWonAndRejectIllegalTransition_WhenWinCalledTwice', () => {
+    // Arrange
     const bet = Bet.place(base());
+
+    // Act
     bet.win();
+
+    // Assert
     expect(bet.status).toBe(BetStatus.Won);
-    expect(() => bet.win()).toThrow(); // déjà réglé
+    expect(() => bet.win()).toThrow();
   });
 });

@@ -47,12 +47,14 @@ describe('BetNext API (e2e, auth BET-20)', () => {
     await app.close();
   });
 
-  it('GET /health → 200 (public)', async () => {
+  it('shouldReturn200WithStatusOk_WhenGettingHealthPublicly', async () => {
+    // When / Then
     const res = await request(server()).get('/health').expect(200);
     expect(res.body.status).toBe('ok');
   });
 
-  it('POST /bets SANS token → 401', async () => {
+  it('shouldReturn401_WhenPostingBetWithoutToken', async () => {
+    // When / Then
     await request(server())
       .post('/bets')
       .set('Idempotency-Key', 'no-auth')
@@ -60,17 +62,21 @@ describe('BetNext API (e2e, auth BET-20)', () => {
       .expect(401);
   });
 
-  it('POST /bets (token joueur, clé) → 201 + cote figée', async () => {
+  it('shouldReturn201WithLockedOdds_WhenPlayerPostsBetWithKey', async () => {
+    // When
     const res = await request(server())
       .post('/bets')
       .set(...auth(tokenA))
       .set('Idempotency-Key', 'k-201')
       .send({ outcomeId: 'o1', stake: 20 })
       .expect(201);
+
+    // Then
     expect(res.body).toMatchObject({ lockedOdds: 2, potentialGain: 40 });
   });
 
-  it('POST /bets sans Idempotency-Key → 400 ; corps invalide → 400 ; mise <= 0 → 422', async () => {
+  it('shouldReturn400Or422_WhenPostingBetWithMissingKeyOrInvalidBodyOrNonPositiveStake', async () => {
+    // When / Then
     await request(server())
       .post('/bets')
       .set(...auth(tokenA))
@@ -90,7 +96,8 @@ describe('BetNext API (e2e, auth BET-20)', () => {
       .expect(422);
   });
 
-  it('idempotence : même clé+corps → même betId ; corps différent → 409', async () => {
+  it('shouldReturnSameBetIdOr409_WhenReplayingKeyWithSameOrDifferentBody', async () => {
+    // When
     const r1 = await request(server())
       .post('/bets')
       .set(...auth(tokenA))
@@ -103,6 +110,8 @@ describe('BetNext API (e2e, auth BET-20)', () => {
       .set('Idempotency-Key', 'idem-1')
       .send({ outcomeId: 'o1', stake: 15 })
       .expect(201);
+
+    // Then
     expect(r2.body.betId).toBe(r1.body.betId);
     await request(server())
       .post('/bets')
@@ -112,7 +121,8 @@ describe('BetNext API (e2e, auth BET-20)', () => {
       .expect(409);
   });
 
-  it('GET /odds/:id read-model FROID → 404 (public) ; read-your-writes scopé', async () => {
+  it('shouldReturn404OnColdOddsAndReadOwnBet_WhenReadingScopedReadModel', async () => {
+    // When / Then
     await request(server()).get('/odds/cold-outcome').expect(404);
     const post = await request(server())
       .post('/bets')
@@ -127,9 +137,8 @@ describe('BetNext API (e2e, auth BET-20)', () => {
     expect(get.body).toMatchObject({ betId: post.body.betId, status: 'PENDING', userId: userIdA });
   });
 
-  // ---- BET-20 : MATRICE D'AUTORISATION ----
-
-  it('IDOR : un joueur ne peut PAS lire le pari d’un autre (404, jamais la donnée)', async () => {
+  it('shouldReturn404NeverTheData_WhenPlayerReadsAnotherPlayersBet', async () => {
+    // Given
     const post = await request(server())
       .post('/bets')
       .set(...auth(tokenA))
@@ -137,12 +146,12 @@ describe('BetNext API (e2e, auth BET-20)', () => {
       .send({ outcomeId: 'o-idor', stake: 10 })
       .expect(201);
     const betId = post.body.betId as string;
-    // propriétaire : 200
+
+    // When / Then
     await request(server())
       .get(`/bets/${betId}`)
       .set(...auth(tokenA))
       .expect(200);
-    // autre joueur : 404 (indistinct de l'inexistant) — pour la vue ET la timeline
     await request(server())
       .get(`/bets/${betId}`)
       .set(...auth(tokenB))
@@ -153,12 +162,14 @@ describe('BetNext API (e2e, auth BET-20)', () => {
       .expect(404);
   });
 
-  it('GET /bets ne renvoie que les paris de l’appelant (scoping liste)', async () => {
+  it('shouldReturnOnlyCallersBets_WhenListingBets', async () => {
+    // When
     const listB = await request(server())
       .get('/bets')
       .set(...auth(tokenB))
       .expect(200);
-    // bob n'a posé aucun pari → aucun des paris d'alice n'apparaît
+
+    // Then
     expect((listB.body as Array<{ userId: string }>).every((b) => b.userId !== userIdA)).toBe(true);
     const listA = await request(server())
       .get('/bets')
@@ -168,8 +179,8 @@ describe('BetNext API (e2e, auth BET-20)', () => {
     expect((listA.body as Array<{ userId: string }>).every((b) => b.userId === userIdA)).toBe(true);
   });
 
-  it('RÔLE : un joueur est REFUSÉ (403) sur les endpoints MANAGER ; un manager passe', async () => {
-    // create-market
+  it('shouldReturn403ForPlayerAndAllowManager_WhenAccessingManagerEndpoints', async () => {
+    // When / Then
     await request(server())
       .post('/markets')
       .set(...auth(tokenA))
@@ -180,7 +191,6 @@ describe('BetNext API (e2e, auth BET-20)', () => {
       .set(...auth(managerTok))
       .send({ name: 'X', game: 'LoL', outcomes: ['a', 'b'] })
       .expect(201);
-    // wallet/open
     await request(server())
       .post('/wallet/open')
       .set(...auth(tokenA))
@@ -191,7 +201,6 @@ describe('BetNext API (e2e, auth BET-20)', () => {
       .set(...auth(managerTok))
       .send({ userId: 'seed-by-mgr', openingBalance: 100 })
       .expect(200);
-    // reconciliation
     await request(server())
       .get('/admin/reconciliation')
       .set(...auth(tokenA))
@@ -202,7 +211,8 @@ describe('BetNext API (e2e, auth BET-20)', () => {
       .expect(200);
   });
 
-  it('settle : 401 sans token, 403 joueur, 200 manager', async () => {
+  it('shouldReturn401WithoutTokenAnd403ForPlayerAnd200ForManager_WhenSettlingMarket', async () => {
+    // When / Then
     await request(server())
       .post('/markets/settle')
       .send({ outcomes: ['mA'] })
@@ -212,7 +222,6 @@ describe('BetNext API (e2e, auth BET-20)', () => {
       .set(...auth(tokenA))
       .send({ outcomes: ['mA'], winningOutcomeId: 'mA' })
       .expect(403);
-    // un joueur pose, le manager règle
     await request(server())
       .post('/bets')
       .set(...auth(tokenA))
@@ -227,7 +236,8 @@ describe('BetNext API (e2e, auth BET-20)', () => {
     expect(res.body).toMatchObject({ won: 1 });
   });
 
-  it('plafond quotidien : le joueur fixe SON cap (userId du token), dépassement → 403', async () => {
+  it('shouldReturn403_WhenPlayerExceedsOwnDailyCap', async () => {
+    // Given
     const { token } = await (async (): Promise<{ token: string }> => {
       await register('capUser').expect(201);
       return login('capUser');
@@ -243,17 +253,24 @@ describe('BetNext API (e2e, auth BET-20)', () => {
         .set('Authorization', `Bearer ${token}`)
         .set('Idempotency-Key', key)
         .send({ outcomeId: 'o1', stake });
+
+    // When / Then
     await place('cap-1', 20).expect(201);
     await place('cap-2', 20).expect(201);
-    await place('cap-3', 20).expect(403); // 60 > 50
+    await place('cap-3', 20).expect(403);
   });
 
-  it('anti-escalade : register ne crée QUE des PLAYER (rôle client ignoré) → settle 403', async () => {
+  it('shouldCreateOnlyPlayerAndReturn403OnSettle_WhenRegisteringWithManagerRole', async () => {
+    // Given
     await request(server())
       .post('/auth/register')
       .send({ username: 'wannabe', password: 'password1', role: 'MANAGER' })
       .expect(201);
+
+    // When
     const { token, role } = await login('wannabe');
+
+    // Then
     expect(role).toBe('PLAYER');
     await request(server())
       .post('/markets/settle')

@@ -35,26 +35,39 @@ class FakeStore implements ComplianceStore {
 describe('ReserveStake (vérif plafond via la couture Policy, dans la tx de pose)', () => {
   const at = new Date('2026-06-16T10:00:00Z');
 
-  it('sous le plafond → réserve et accumule la mise du jour', async () => {
+  it('shouldReserveAndAccumulateDailyStake_WhenUnderCap', async () => {
+    // Arrange
     const store = new FakeStore(100);
     const reserve = new ReserveStake(store, new CompliancePolicyRegistry([new DailyCapPolicy()]));
+
+    // Act
     await reserve.reserve('u1', 40, at);
     await reserve.reserve('u1', 30, at);
+
+    // Assert
     expect(store.staked('u1', '2026-06-16')).toBe(70);
   });
 
-  it('dépassement → refus (DailyCapExceededError) et mise NON réservée', async () => {
+  it('shouldRejectAndNotReserve_WhenStakeExceedsCap', async () => {
+    // Arrange
     const store = new FakeStore(100);
     const reserve = new ReserveStake(store, new CompliancePolicyRegistry([new DailyCapPolicy()]));
     await reserve.reserve('u1', 80, at);
+
+    // Act / Assert
     await expect(reserve.reserve('u1', 30, at)).rejects.toBeInstanceOf(DailyCapExceededError);
-    expect(store.staked('u1', '2026-06-16')).toBe(80); // la mise refusée n'est pas comptée
+    expect(store.staked('u1', '2026-06-16')).toBe(80);
   });
 
-  it('aucun plafond défini → illimité', async () => {
+  it('shouldReserveUnlimited_WhenNoCapDefined', async () => {
+    // Arrange
     const store = new FakeStore();
     const reserve = new ReserveStake(store, new CompliancePolicyRegistry([new DailyCapPolicy()]));
+
+    // Act
     await reserve.reserve('u1', 9999, at);
+
+    // Assert
     expect(store.staked('u1', '2026-06-16')).toBe(9999);
   });
 });

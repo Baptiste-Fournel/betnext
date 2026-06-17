@@ -3,12 +3,16 @@ import { WINNING_OUTCOME_STRATEGY } from '../domain/settlement/WinningOutcomeStr
 import { DomainError } from '../../../shared-kernel/domain/DomainError';
 
 describe('SettlementStrategyFactory (couture polymorphe — ajouter un type sans réécrire)', () => {
-  it('résout la stratégie par défaut (WinningOutcomeStrategy enregistrée)', () => {
+  it('shouldResolveDefaultStrategy_WhenNoKeyProvided', () => {
+    // Arrange
     const strategy = new SettlementStrategyFactory().resolve();
+
+    // Assert
     expect(strategy.key).toBe(WINNING_OUTCOME_STRATEGY);
   });
 
-  it('clé inconnue → échec explicite (le règlement ne devine pas)', () => {
+  it('shouldThrowDomainError_WhenKeyUnknown', () => {
+    // Act / Assert
     expect(() => new SettlementStrategyFactory().resolve('SCORE_EXACT')).toThrow(DomainError);
   });
 });

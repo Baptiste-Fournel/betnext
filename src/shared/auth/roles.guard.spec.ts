@@ -19,25 +19,29 @@ const guardRequiring = (roles: AuthRole[] | undefined): RolesGuard => {
 };
 
 describe('RolesGuard (BET-20)', () => {
-  it('laisse passer si aucun rôle requis', () => {
+  it('shouldAllow_WhenNoRoleRequired', () => {
+    // When / Then
     expect(guardRequiring(undefined).canActivate(ctxWith({ userId: 'u1', role: 'PLAYER' }))).toBe(
       true,
     );
   });
 
-  it('403 si le rôle ne correspond pas (joueur sur endpoint gestionnaire)', () => {
+  it('shouldThrowForbidden_WhenPlayerHitsManagerOnlyEndpoint', () => {
+    // When / Then
     expect(() =>
       guardRequiring(['MANAGER']).canActivate(ctxWith({ userId: 'u1', role: 'PLAYER' })),
     ).toThrow(ForbiddenException);
   });
 
-  it('laisse passer le bon rôle', () => {
+  it('shouldAllow_WhenRoleMatchesRequired', () => {
+    // When / Then
     expect(
       guardRequiring(['MANAGER']).canActivate(ctxWith({ userId: 'm1', role: 'MANAGER' })),
     ).toBe(true);
   });
 
-  it('403 si un rôle est requis mais l’utilisateur est absent', () => {
+  it('shouldThrowForbidden_WhenRoleRequiredButUserAbsent', () => {
+    // When / Then
     expect(() => guardRequiring(['PLAYER']).canActivate(ctxWith(undefined))).toThrow(
       ForbiddenException,
     );

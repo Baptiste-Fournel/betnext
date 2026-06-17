@@ -72,19 +72,26 @@ function routesOf(controller: Type): RouteInfo[] {
 describe('Couverture des guards (BET-20)', () => {
   const routes = CONTROLLERS.flatMap(routesOf);
 
-  it('découvre toutes les routes (sanity)', () => {
+  it('shouldDiscoverAllRoutes_WhenInspectingControllers', () => {
+    // Act / Assert
     expect(routes.length).toBeGreaterThanOrEqual(15);
   });
 
-  it('chaque endpoint NON public porte JwtAuthGuard', () => {
+  it('shouldCarryJwtAuthGuard_WhenEndpointNotPublic', () => {
+    // Act
     const unprotected = routes
       .filter((r) => !PUBLIC_ALLOWLIST.has(r.key) && !r.hasJwtGuard)
       .map((r) => r.key);
+
+    // Assert
     expect(unprotected).toEqual([]);
   });
 
-  it("l'allowlist publique n'a aucune entrée morte (route renommée/supprimée)", () => {
+  it('shouldHaveNoDeadEntries_WhenCheckingPublicAllowlistAgainstRoutes', () => {
+    // Act
     const keys = new Set(routes.map((r) => r.key));
+
+    // Assert
     expect([...PUBLIC_ALLOWLIST].filter((k) => !keys.has(k))).toEqual([]);
   });
 });

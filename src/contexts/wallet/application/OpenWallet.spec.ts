@@ -13,17 +13,22 @@ const fakeFunding = (): WalletFunding => {
 };
 
 describe('OpenWallet (BET-15)', () => {
-  it('ouvre un wallet (opened=true) puis no-op au rejeu (opened=false)', async () => {
+  it('shouldOpenThenNoOp_WhenSameUserOpenedTwice', async () => {
+    // Arrange
     const uc = new OpenWallet(fakeFunding());
+
+    // Act / Assert
     expect((await uc.execute('u1', 50)).opened).toBe(true);
     expect((await uc.execute('u1', 50)).opened).toBe(false);
   });
 
-  it("refuse un solde d'ouverture négatif", async () => {
+  it('shouldThrow_WhenOpeningBalanceNegative', async () => {
+    // Act / Assert
     await expect(new OpenWallet(fakeFunding()).execute('u1', -1)).rejects.toThrow();
   });
 
-  it('refuse un userId vide', async () => {
+  it('shouldThrow_WhenUserIdEmpty', async () => {
+    // Act / Assert
     await expect(new OpenWallet(fakeFunding()).execute('   ', 10)).rejects.toThrow();
   });
 });

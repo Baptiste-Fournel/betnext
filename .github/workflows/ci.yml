@@ -28,6 +28,8 @@ jobs:
         run: npm run lint
       - name: Module boundaries (ready-to-split)
         run: npm run boundaries
+      - name: Convention de nommage des tests (shouldXxxx_WhenXxxx — BET-26)
+        run: npm run test:naming
       - name: Tests (TDD)
         run: npm test -- --ci
       - name: Build

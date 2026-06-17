@@ -20,7 +20,8 @@ class FakeRiotClient implements RiotClient {
 }
 
 describe('ResilientRiotClient (BET-21, défi 3 contre stub)', () => {
-  it('panne répétée → le circuit s’OUVRE et court-circuite (dépendance plus appelée)', async () => {
+  it('shouldOpenCircuitAndShortCircuit_WhenRepeatedFailures', async () => {
+    // Arrange
     const fake = new FakeRiotClient(() => Promise.reject(new Error('riot down')));
     const breaker = new CircuitBreaker({
       failureThreshold: 2,
@@ -33,16 +34,18 @@ describe('ResilientRiotClient (BET-21, défi 3 contre stub)', () => {
       baseDelayMs: 0,
     });
 
-    await expect(client.getMatch('m')).rejects.toThrow('riot down'); // échec définitif #1
-    await expect(client.getMatch('m')).rejects.toThrow('riot down'); // échec définitif #2 → OPEN
+    // Act / Assert
+    await expect(client.getMatch('m')).rejects.toThrow('riot down');
+    await expect(client.getMatch('m')).rejects.toThrow('riot down');
     expect(breaker.currentState).toBe('OPEN');
 
     const callsBefore = fake.calls;
-    await expect(client.getMatch('m')).rejects.toBeInstanceOf(CircuitOpenError); // fail-fast
-    expect(fake.calls).toBe(callsBefore); // la dépendance n'a PAS été rappelée
+    await expect(client.getMatch('m')).rejects.toBeInstanceOf(CircuitOpenError);
+    expect(fake.calls).toBe(callsBefore);
   });
 
-  it('erreur transitoire → retry puis succès', async () => {
+  it('shouldRetryThenSucceed_WhenTransientError', async () => {
+    // Arrange
     const fake = new FakeRiotClient((call) =>
       call < 2 ? Promise.reject(new Error('transient')) : Promise.resolve(finished),
     );
@@ -57,12 +60,14 @@ describe('ResilientRiotClient (BET-21, défi 3 contre stub)', () => {
       baseDelayMs: 0,
     });
 
+    // Act / Assert
     await expect(client.getMatch('m')).resolves.toEqual(finished);
     expect(fake.calls).toBe(2);
     expect(breaker.currentState).toBe('CLOSED');
   });
 
-  it('dépendance trop lente → TimeoutError', async () => {
+  it('shouldRejectWithTimeoutError_WhenDependencyTooSlow', async () => {
+    // Arrange
     const fake = new FakeRiotClient(
       () => new Promise<RiotMatchPayload>((resolve) => setTimeout(() => resolve(finished), 100)),
     );
@@ -77,6 +82,7 @@ describe('ResilientRiotClient (BET-21, défi 3 contre stub)', () => {
       baseDelayMs: 0,
     });
 
+    // Act / Assert
     await expect(client.getMatch('m')).rejects.toBeInstanceOf(TimeoutError);
   });
 });

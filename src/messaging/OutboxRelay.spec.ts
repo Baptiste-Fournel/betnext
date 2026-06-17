@@ -67,29 +67,43 @@ describe('OutboxRelay', () => {
   const unpublished = (): Promise<number> =>
     ds.getRepository(OutboxRecord).count({ where: { publishedAt: IsNull() } });
 
-  it('publie les non-publiés puis les marque publiés APRÈS enqueue', async () => {
+  it('shouldEnqueueThenMarkPublished_WhenPendingMessagesExist', async () => {
+    // Arrange
     await seed(2);
     const queue = new RecordingQueue();
+
+    // Act
     const published = await new OutboxRelay(ds, queue).publishPending();
 
+    // Assert
     expect(published).toBe(2);
     expect(queue.enqueued).toHaveLength(2);
     expect(await unpublished()).toBe(0);
   });
 
-  it('si tous les enqueue échouent : 0 publié, tout reste à rejouer, sans planter le relais', async () => {
+  it('shouldPublishNoneAndKeepAllForReplay_WhenEveryEnqueueFails', async () => {
+    // Arrange
     await seed(2);
+
+    // Act
     const published = await new OutboxRelay(ds, new FailingQueue()).publishPending();
+
+    // Assert
     expect(published).toBe(0);
     expect(await unpublished()).toBe(2);
   });
 
-  it('une ligne empoisonnée ne bloque pas les autres (pas de head-of-line blocking)', async () => {
+  it('shouldNotBlockOthers_WhenOnePoisonedRowFails', async () => {
+    // Arrange
     await seed(2);
     const queue = new FlakyQueue();
+
+    // Act
     const published = await new OutboxRelay(ds, queue).publishPending();
-    expect(published).toBe(1); // la 2e passe malgré l'échec de la 1re
+
+    // Assert
+    expect(published).toBe(1);
     expect(queue.enqueued).toHaveLength(1);
-    expect(await unpublished()).toBe(1); // la 1re reste à rejouer
+    expect(await unpublished()).toBe(1);
   });
 });

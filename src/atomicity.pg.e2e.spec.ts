@@ -5,7 +5,8 @@
  * (solde inchangé, aucun pari, aucun event). Voir scripts/atomicity-pg.cjs.
  */
 describe.skip('Atomicité PG réel (voir: npm run test:atomicity:pg)', () => {
-  it('exécuté hors Jest', () => {
+  it('shouldRunOutsideJest_WhenAtomicityIsValidatedAgainstRealPostgres', () => {
+    // When / Then
     expect(true).toBe(true);
   });
 });

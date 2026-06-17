@@ -37,13 +37,12 @@ describe('BetNext intégration Riot (e2e, BET-21)', () => {
     await app.close();
   });
 
-  it('flux complet : lier → poser → synchroniser → règlement AUTO, puis rejeu exactly-once', async () => {
-    // marché de démo (catalogue en mémoire)
+  it('shouldAutoSettleWonBetAndStayExactlyOnceOnResync_WhenManagerLinksAndSyncsMatch', async () => {
+    // Given
     const markets = await request(server()).get('/markets').expect(200);
     const market = markets.body[0];
     const outcomes: string[] = market.outcomes.map((o: { id: string }) => o.id);
 
-    // un joueur parie sur la 1re issue
     const placed = await request(server())
       .post('/bets')
       .set(...bearer(playerTok))
@@ -52,7 +51,6 @@ describe('BetNext intégration Riot (e2e, BET-21)', () => {
       .expect(201);
     const betId = placed.body.betId as string;
 
-    // le manager lie le match au marché (HOME = 1re issue gagnante)
     await request(server())
       .post('/game-integration/matches')
       .set(...bearer(managerTok))
@@ -63,22 +61,22 @@ describe('BetNext intégration Riot (e2e, BET-21)', () => {
       })
       .expect(200);
 
-    // synchro → le stub renvoie HOME gagnant → règlement automatique
+    // When
     const sync = await request(server())
       .post(`/game-integration/matches/${matchId}/sync`)
       .set(...bearer(managerTok))
       .expect(200);
+
+    // Then
     expect(sync.body).toMatchObject({ status: 'SETTLED', resolution: 'WON_OUTCOME' });
     expect(sync.body.summary.won).toBeGreaterThanOrEqual(1);
 
-    // le pari du joueur est WON
     const bet = await request(server())
       .get(`/bets/${betId}`)
       .set(...bearer(playerTok))
       .expect(200);
     expect(bet.body.status).toBe('WON');
 
-    // RE-synchroniser ne re-règle RIEN (exactly-once : plus aucun pari en attente)
     const resync = await request(server())
       .post(`/game-integration/matches/${matchId}/sync`)
       .set(...bearer(managerTok))
@@ -86,7 +84,8 @@ describe('BetNext intégration Riot (e2e, BET-21)', () => {
     expect(resync.body.summary).toMatchObject({ settled: 0, won: 0 });
   });
 
-  it('endpoints réservés au MANAGER : 401 sans token, 403 pour un joueur', async () => {
+  it('shouldReturn401WithoutTokenAnd403ForPlayer_WhenAccessingManagerSyncEndpoint', async () => {
+    // When / Then
     await request(server()).post(`/game-integration/matches/${matchId}/sync`).expect(401);
     await request(server())
       .post(`/game-integration/matches/${matchId}/sync`)

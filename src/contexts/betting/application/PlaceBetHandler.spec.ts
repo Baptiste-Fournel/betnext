@@ -67,14 +67,17 @@ const alwaysClaims: IdempotencyStore = {
 };
 
 describe('PlaceBetHandler (CQRS → use case idempotent)', () => {
-  it('exécute la commande, fige la cote et débite le wallet une seule fois', async () => {
+  it('shouldLockOddsAndDebitWalletOnce_WhenCommandExecuted', async () => {
+    // Arrange
     const bets = new InMemoryBets();
     const wallet = new SpyWallet();
     const placeBet = new PlaceBet(bets, new FixedOdds(2.5), wallet, new SeqIds(), noopUow);
     const handler = new PlaceBetHandler(new IdempotentPlaceBet(placeBet, alwaysClaims, noopUow));
 
+    // Act
     const out = await handler.execute(new PlaceBetCommand('u1', 'o1', 20, 'key-1', 'hash-1'));
 
+    // Assert
     expect(out.lockedOdds).toBe(2.5);
     expect(out.potentialGain).toBe(50);
     expect(bets.saved).toHaveLength(1);

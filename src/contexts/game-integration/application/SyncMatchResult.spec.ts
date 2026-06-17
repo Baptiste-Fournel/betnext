@@ -33,13 +33,18 @@ const recordingSettlement = (): MarketSettlementPort & { calls: SettlementReques
 };
 
 describe('SyncMatchResult (BET-21)', () => {
-  it('match FINI (HOME) → règle le marché sur l’issue mappée, voided=false', async () => {
+  it('shouldSettleMarketOnMappedOutcomeNotVoided_WhenMatchFinishedWithHomeWinner', async () => {
+    // Arrange
     const settlement = recordingSettlement();
+
+    // Act
     const res = await new SyncMatchResult(
       provider({ matchId: 'EUW1_42', status: 'FINISHED', winner: 'HOME' }),
       linkStore(link),
       settlement,
     ).execute('EUW1_42');
+
+    // Assert
     expect(res).toMatchObject({
       status: 'SETTLED',
       resolution: 'WON_OUTCOME',
@@ -50,36 +55,47 @@ describe('SyncMatchResult (BET-21)', () => {
     ]);
   });
 
-  it('match PENDING → NE règle PAS (aucun appel settlement)', async () => {
+  it('shouldNotSettleMarket_WhenMatchStillPending', async () => {
+    // Arrange
     const settlement = recordingSettlement();
+
+    // Act
     const res = await new SyncMatchResult(
       provider({ matchId: 'EUW1_42', status: 'PENDING', winner: null }),
       linkStore(link),
       settlement,
     ).execute('EUW1_42');
+
+    // Assert
     expect(res.status).toBe('PENDING');
     expect(settlement.calls).toHaveLength(0);
   });
 
-  it('résultat DRAW sans issue « nul » mappée → marché ANNULÉ (remboursement)', async () => {
+  it('shouldVoidMarketAndRefund_WhenDrawResultButNoDrawOutcomeMapped', async () => {
+    // Arrange
     const settlement = recordingSettlement();
     const twoWay: MatchLink = {
       matchId: 'm',
       outcomes: ['o-a', 'o-b'],
       mapping: { HOME: 'o-a', AWAY: 'o-b' },
     };
+
+    // Act
     const res = await new SyncMatchResult(
       provider({ matchId: 'm', status: 'FINISHED', winner: 'DRAW' }),
       linkStore(twoWay),
       settlement,
     ).execute('m');
+
+    // Assert
     expect(res).toMatchObject({ status: 'SETTLED', resolution: 'VOIDED' });
     expect(settlement.calls).toEqual([
       { outcomes: twoWay.outcomes, winningOutcomeId: null, voided: true },
     ]);
   });
 
-  it('match non lié → erreur (404)', async () => {
+  it('shouldThrow_WhenMatchNotLinked', async () => {
+    // Act / Assert
     await expect(
       new SyncMatchResult(
         provider({ matchId: 'x', status: 'FINISHED', winner: 'HOME' }),

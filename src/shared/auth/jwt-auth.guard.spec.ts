@@ -11,24 +11,30 @@ const ctxWith = (req: Record<string, unknown>): ExecutionContext =>
 describe('JwtAuthGuard (BET-20)', () => {
   const guard = new JwtAuthGuard(verifier);
 
-  it('401 sans header Authorization', () => {
+  it('shouldThrowUnauthorized_WhenAuthorizationHeaderMissing', () => {
+    // When / Then
     expect(() => guard.canActivate(ctxWith({ headers: {} }))).toThrow(UnauthorizedException);
   });
 
-  it('401 si le schéma n’est pas Bearer', () => {
+  it('shouldThrowUnauthorized_WhenSchemeNotBearer', () => {
+    // When / Then
     expect(() => guard.canActivate(ctxWith({ headers: { authorization: 'Basic abc' } }))).toThrow(
       UnauthorizedException,
     );
   });
 
-  it('401 si le token est invalide', () => {
+  it('shouldThrowUnauthorized_WhenTokenInvalid', () => {
+    // When / Then
     expect(() => guard.canActivate(ctxWith({ headers: { authorization: 'Bearer bad' } }))).toThrow(
       UnauthorizedException,
     );
   });
 
-  it('pose req.user et laisse passer un token valide', () => {
+  it('shouldSetReqUserAndAllow_WhenTokenValid', () => {
+    // Given
     const req: Record<string, unknown> = { headers: { authorization: 'Bearer good' } };
+
+    // When / Then
     expect(guard.canActivate(ctxWith(req))).toBe(true);
     expect(req.user).toEqual({ userId: 'u1', role: 'PLAYER' });
   });

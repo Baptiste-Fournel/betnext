@@ -6,7 +6,8 @@ const clientReturning = (payload: RiotMatchPayload): RiotClient => ({
 });
 
 describe('RiotGameProvider — ACL Riot → modèle interne (BET-21)', () => {
-  it('équipe 100 gagnante → HOME', async () => {
+  it('shouldMapWinnerToHome_WhenTeam100Wins', async () => {
+    // Act
     const report = await new RiotGameProvider(
       clientReturning({
         matchId: 'm',
@@ -17,10 +18,13 @@ describe('RiotGameProvider — ACL Riot → modèle interne (BET-21)', () => {
         ],
       }),
     ).fetchMatchReport('m');
+
+    // Assert
     expect(report).toEqual({ matchId: 'm', status: 'FINISHED', winner: 'HOME' });
   });
 
-  it('équipe 200 gagnante → AWAY', async () => {
+  it('shouldMapWinnerToAway_WhenTeam200Wins', async () => {
+    // Act
     const report = await new RiotGameProvider(
       clientReturning({
         matchId: 'm',
@@ -31,10 +35,13 @@ describe('RiotGameProvider — ACL Riot → modèle interne (BET-21)', () => {
         ],
       }),
     ).fetchMatchReport('m');
+
+    // Assert
     expect(report.winner).toBe('AWAY');
   });
 
-  it('match fini sans vainqueur → DRAW', async () => {
+  it('shouldMapWinnerToDraw_WhenMatchFinishedWithoutWinner', async () => {
+    // Act
     const report = await new RiotGameProvider(
       clientReturning({
         matchId: 'm',
@@ -45,17 +52,23 @@ describe('RiotGameProvider — ACL Riot → modèle interne (BET-21)', () => {
         ],
       }),
     ).fetchMatchReport('m');
+
+    // Assert
     expect(report.winner).toBe('DRAW');
   });
 
-  it('match non disponible → PENDING (pas une erreur)', async () => {
+  it('shouldReturnPendingWithoutError_WhenMatchNotAvailable', async () => {
+    // Act
     const report = await new RiotGameProvider(
       clientReturning({ matchId: 'm', finished: false, teams: [] }),
     ).fetchMatchReport('m');
+
+    // Assert
     expect(report).toEqual({ matchId: 'm', status: 'PENDING', winner: null });
   });
 
-  it('teamId hors convention (ni 100 ni 200) → LÈVE, ne règle PAS le mauvais côté (sécurité argent)', async () => {
+  it('shouldThrowAndNotSettleWrongSide_WhenTeamIdOutsideConvention', async () => {
+    // Act / Assert
     await expect(
       new RiotGameProvider(
         clientReturning({

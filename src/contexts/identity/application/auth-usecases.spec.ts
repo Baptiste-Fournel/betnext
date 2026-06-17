@@ -23,17 +23,23 @@ const fakeTokens: TokenService = { sign: () => ({ token: 'tok', expiresInSec: 36
 const ids = { next: (): string => 'id-1' };
 
 describe('RegisterUser (BET-20)', () => {
-  it('hache le mot de passe (jamais le clair) et crée le compte', async () => {
+  it('shouldHashPasswordNeverPlaintextAndCreatePlayerAccount_WhenRegistering', async () => {
+    // Arrange
     const store = fakeStore();
+
+    // Act
     const res = await new RegisterUser(store, fakeHasher, ids).execute({
       username: 'alice',
       password: 'password1',
     });
-    expect(res).toEqual({ id: 'id-1', username: 'alice', role: 'PLAYER' }); // rôle PLAYER imposé par le use-case
+
+    // Assert
+    expect(res).toEqual({ id: 'id-1', username: 'alice', role: 'PLAYER' });
     expect(store.rows.get('alice')?.passwordHash).toBe('H(password1)');
   });
 
-  it('refuse un mot de passe trop court', async () => {
+  it('shouldReject_WhenPasswordTooShort', async () => {
+    // Act / Assert
     await expect(
       new RegisterUser(fakeStore(), fakeHasher, ids).execute({
         username: 'a',
@@ -42,10 +48,13 @@ describe('RegisterUser (BET-20)', () => {
     ).rejects.toThrow();
   });
 
-  it('refuse un username déjà pris', async () => {
+  it('shouldReject_WhenUsernameAlreadyTaken', async () => {
+    // Arrange
     const store = fakeStore();
     const uc = new RegisterUser(store, fakeHasher, ids);
     await uc.execute({ username: 'bob', password: 'password1' });
+
+    // Act / Assert
     await expect(uc.execute({ username: 'bob', password: 'password2' })).rejects.toThrow();
   });
 });
@@ -62,15 +71,19 @@ describe('LoginUser (BET-20)', () => {
     return s;
   };
 
-  it('émet un token pour des identifiants valides', async () => {
+  it('shouldIssueToken_WhenCredentialsValid', async () => {
+    // Act
     const res = await new LoginUser(seeded(), fakeHasher, fakeTokens).execute({
       username: 'alice',
       password: 'password1',
     });
+
+    // Assert
     expect(res).toMatchObject({ userId: 'id-1', role: 'PLAYER', token: 'tok' });
   });
 
-  it('mauvais mot de passe ET utilisateur inconnu → MÊME message 401 (pas d’énumération)', async () => {
+  it('shouldRejectWithSameInvalidCredentialsMessage_WhenWrongPasswordOrUnknownUser', async () => {
+    // Arrange
     const wrongPass = new LoginUser(seeded(), fakeHasher, fakeTokens).execute({
       username: 'alice',
       password: 'nope',
@@ -79,6 +92,8 @@ describe('LoginUser (BET-20)', () => {
       username: 'ghost',
       password: 'x',
     });
+
+    // Act / Assert
     await expect(wrongPass).rejects.toThrow('Identifiants invalides');
     await expect(unknown).rejects.toThrow('Identifiants invalides');
   });

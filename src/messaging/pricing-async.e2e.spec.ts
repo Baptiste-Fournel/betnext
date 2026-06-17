@@ -45,7 +45,8 @@ describe('Boucle async Pricing : BetPlaced → relais → recalcul → OddsUpdat
     if (ds?.isInitialized) await ds.destroy();
   });
 
-  it('relaie les BetPlaced de l outbox vers le bus ; Pricing recalcule et publie OddsUpdated', async () => {
+  it('shouldRelayBetPlacedAndPublishRecalculatedOddsUpdated_WhenRelayingPendingOutbox', async () => {
+    // Given
     const repo = ds.getRepository(OutboxRecord);
     await repo.insert({ id: randomUUID(), type: 'BetPlaced', payload: betPlaced('A', 10) });
     await repo.insert({ id: randomUUID(), type: 'BetPlaced', payload: betPlaced('B', 30) });
@@ -71,32 +72,36 @@ describe('Boucle async Pricing : BetPlaced → relais → recalcul → OddsUpdat
       }
     });
 
+    // When
     const published = await new OutboxRelay(
       ds,
       bus.publisherFor(DOMAIN_EVENTS_QUEUE),
     ).publishPending();
 
+    // Then
     expect(published).toBe(2);
-    expect(oddsSeen).toHaveLength(2); // une OddsUpdated par BetPlaced consommé
+    expect(oddsSeen).toHaveLength(2);
     const last = JSON.parse(oddsSeen[oddsSeen.length - 1].payload) as {
       updates: { outcomeId: string; odds: number }[];
     };
-    // cote RECALCULÉE de A = 40/10 = 4.00, alors que la cote FIGÉE du pari déjà posé reste 2 (jamais modifiée)
     expect(last.updates.find((u) => u.outcomeId === 'A')?.odds).toBeCloseTo(4, 2);
     expect((JSON.parse(betPlaced('A', 10)) as { lockedOdds: number }).lockedOdds).toBe(2);
   });
 
-  it('Pricing DOWN (aucun abonné) : le relais réussit, aucune perte — placeBet ne dépend pas de Pricing', async () => {
+  it('shouldPublishWithoutLoss_WhenPricingIsDownWithNoSubscribers', async () => {
+    // Given
     const repo = ds.getRepository(OutboxRecord);
     await repo.insert({ id: randomUUID(), type: 'BetPlaced', payload: betPlaced('A', 10) });
-    const bus = new InMemoryEventBus(); // personne n'écoute domain-events (service Pricing arrêté)
+    const bus = new InMemoryEventBus();
 
+    // When
     const published = await new OutboxRelay(
       ds,
       bus.publisherFor(DOMAIN_EVENTS_QUEUE),
     ).publishPending();
 
-    expect(published).toBe(1); // publié sans erreur ; la cote du pari est figée, indépendante de Pricing
+    // Then
+    expect(published).toBe(1);
     expect(await repo.count()).toBe(1);
   });
 });

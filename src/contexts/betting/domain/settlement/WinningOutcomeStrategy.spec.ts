@@ -8,21 +8,24 @@ const bet = (outcomeId: string): Bet =>
 describe('WinningOutcomeStrategy (1re vraie stratégie de règlement)', () => {
   const strategy = new WinningOutcomeStrategy();
 
-  it('issue gagnante → WON, payé à la cote figée (potentialGain)', () => {
+  it('shouldDecideWonPaidAtLockedOdds_WhenOutcomeWins', () => {
+    // Act / Assert
     expect(strategy.decide(bet('A'), { winningOutcomeId: 'A', voided: false })).toEqual({
       kind: 'WON',
-      payout: 40, // 20 × 2 (cote figée)
+      payout: 40,
     });
   });
 
-  it('autre issue → LOST, aucun paiement', () => {
+  it('shouldDecideLostWithNoPayout_WhenAnotherOutcomeWins', () => {
+    // Act / Assert
     expect(strategy.decide(bet('A'), { winningOutcomeId: 'B', voided: false })).toEqual({
       kind: 'LOST',
       payout: 0,
     });
   });
 
-  it('marché annulé → VOID, remboursement EXACT de la mise', () => {
+  it('shouldDecideVoidRefundingExactStake_WhenMarketVoided', () => {
+    // Act / Assert
     expect(strategy.decide(bet('A'), { winningOutcomeId: null, voided: true })).toEqual({
       kind: 'VOID',
       payout: 20,

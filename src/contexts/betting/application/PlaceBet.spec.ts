@@ -56,13 +56,16 @@ const noopUow: UnitOfWork = {
 };
 
 describe('PlaceBet (use case hexagonal)', () => {
-  it('fige la cote, débite le wallet une fois et persiste le pari (unité de travail)', async () => {
+  it('shouldLockOddsAndDebitWalletOnceAndPersistBet_WhenCommandExecuted', async () => {
+    // Arrange
     const bets = new InMemoryBets();
     const wallet = new SpyWallet();
     const useCase = new PlaceBet(bets, new FixedOdds(2.5), wallet, new SeqIds(), noopUow);
 
+    // Act
     const out = await useCase.execute({ userId: 'u1', outcomeId: 'o1', stake: 20 });
 
+    // Assert
     expect(out.lockedOdds).toBe(2.5);
     expect(out.potentialGain).toBe(50);
     expect(bets.saved).toHaveLength(1);

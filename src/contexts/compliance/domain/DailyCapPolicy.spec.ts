@@ -10,16 +10,23 @@ describe('DailyCapPolicy (1re règle de jeu responsable)', () => {
     dailyCap,
   });
 
-  it('aucun plafond → autorisé', () => {
+  it('shouldBeAllowed_WhenNoCapDefined', () => {
+    // Act / Assert
     expect(() => policy.check(snap(50, 0, null))).not.toThrow();
   });
-  it('sous le plafond → autorisé', () => {
+
+  it('shouldBeAllowed_WhenStakeUnderCap', () => {
+    // Act / Assert
     expect(() => policy.check(snap(30, 60, 100))).not.toThrow();
   });
-  it('pile au plafond → autorisé (limite incluse)', () => {
+
+  it('shouldBeAllowed_WhenStakeExactlyAtCap', () => {
+    // Act / Assert
     expect(() => policy.check(snap(40, 60, 100))).not.toThrow();
   });
-  it('dépasse le plafond → DailyCapExceededError', () => {
+
+  it('shouldThrowDailyCapExceeded_WhenStakeOverCap', () => {
+    // Act / Assert
     expect(() => policy.check(snap(50, 60, 100))).toThrow(DailyCapExceededError);
   });
 });

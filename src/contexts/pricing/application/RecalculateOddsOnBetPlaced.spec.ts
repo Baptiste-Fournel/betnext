@@ -27,28 +27,33 @@ class RecordingPublisher implements OddsPublisher {
 }
 
 describe('RecalculateOddsOnBetPlaced (recalcul async hors chemin d écriture)', () => {
-  it('accumule les totaux par issue et publie une cote pari-mutuel bornée à chaque BetPlaced', async () => {
+  it('shouldAccumulateTotalsAndPublishBoundedPariMutuelOdds_WhenBetPlaced', async () => {
+    // Arrange
     const publisher = new RecordingPublisher();
     const recalc = new RecalculateOddsOnBetPlaced(new FakeStore(), new OddsCalculator(), publisher);
 
+    // Act
     await recalc.handle({ messageId: 'm1', outcomeId: 'A', stake: 10 });
     const updates = await recalc.handle({ messageId: 'm2', outcomeId: 'B', stake: 30 });
 
-    // total misé 40 → A = 40/10 = 4.00 ; B = 40/30 = 1.33 (dans [1.10, 5.00])
+    // Assert
     expect(updates?.find((u) => u.outcomeId === 'A')?.odds).toBeCloseTo(4, 2);
     expect(updates?.find((u) => u.outcomeId === 'B')?.odds).toBeCloseTo(1.33, 2);
     expect(publisher.published).toHaveLength(2);
   });
 
-  it('idempotent : même messageId rejoué (re-livraison) → no-op, jamais de double comptage', async () => {
+  it('shouldNoOpWithoutDoubleCounting_WhenSameMessageIdRedelivered', async () => {
+    // Arrange
     const publisher = new RecordingPublisher();
     const recalc = new RecalculateOddsOnBetPlaced(new FakeStore(), new OddsCalculator(), publisher);
 
+    // Act
     const first = await recalc.handle({ messageId: 'm1', outcomeId: 'A', stake: 10 });
     const second = await recalc.handle({ messageId: 'm1', outcomeId: 'A', stake: 10 });
 
+    // Assert
     expect(first).not.toBeNull();
-    expect(second).toBeNull(); // 2e livraison du même message ignorée
-    expect(publisher.published).toHaveLength(1); // publié une seule fois → totaux non doublés
+    expect(second).toBeNull();
+    expect(publisher.published).toHaveLength(1);
   });
 });

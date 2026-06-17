@@ -1,16 +1,20 @@
 import { InMemoryOddsReadModel } from './InMemoryOddsReadModel';
 
 describe('InMemoryOddsReadModel (garde monotone anti out-of-order)', () => {
-  it('un snapshot plus ANCIEN n écrase pas une cote plus récente ; un plus récent s applique', async () => {
+  it('shouldKeepRecentOddsAndApplyNewer_WhenSnapshotsArriveOutOfOrder', async () => {
+    // Arrange
     const rm = new InMemoryOddsReadModel();
+
+    // Act / Assert
     await rm.put([{ outcomeId: 'o1', odds: 4 }], 100);
-    await rm.put([{ outcomeId: 'o1', odds: 9 }], 50); // occurredAt plus ancien → ignoré
+    await rm.put([{ outcomeId: 'o1', odds: 9 }], 50);
     expect(await rm.current('o1')).toBe(4);
-    await rm.put([{ outcomeId: 'o1', odds: 5 }], 150); // plus récent → appliqué
+    await rm.put([{ outcomeId: 'o1', odds: 5 }], 150);
     expect(await rm.current('o1')).toBe(5);
   });
 
-  it('cold cache → null', async () => {
+  it('shouldReturnNull_WhenCacheIsCold', async () => {
+    // Act / Assert
     expect(await new InMemoryOddsReadModel().current('inconnu')).toBeNull();
   });
 });
