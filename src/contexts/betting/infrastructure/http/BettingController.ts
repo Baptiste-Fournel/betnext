@@ -30,8 +30,10 @@ import { PlaceBetCommand } from '../../application/PlaceBetCommand';
 import { GetBetQuery } from '../../application/GetBetQuery';
 import { ListBetsQuery } from '../../application/ListBetsQuery';
 import { GetBetHistoryQuery } from '../../application/GetBetHistoryQuery';
+import { PlayerStatsQuery } from '../../application/PlayerStatsQuery';
 import { BetView } from '../../application/GetBetHandler';
 import { BetEventView } from '../../application/GetBetHistoryHandler';
+import { PlayerStatsView } from '../../application/GetPlayerStatsHandler';
 import { JwtAuthGuard } from '../../../../shared/auth/jwt-auth.guard';
 import { CurrentUser } from '../../../../shared/auth/current-user.decorator';
 import { AuthUser } from '../../../../shared/auth/auth-user';
@@ -78,6 +80,24 @@ class BetEventDto {
   type!: string;
   @ApiProperty({ example: '2026-06-16T10:00:00.000Z' })
   occurredAt!: string;
+}
+class PlayerStatsDto {
+  @ApiProperty({ example: 12, description: 'Nombre total de paris du joueur' })
+  totalBets!: number;
+  @ApiProperty({ example: 3, description: 'Paris en attente (indécis)' })
+  pending!: number;
+  @ApiProperty({ example: 5, description: 'Paris gagnés' })
+  won!: number;
+  @ApiProperty({ example: 3, description: 'Paris perdus' })
+  lost!: number;
+  @ApiProperty({ example: 1, description: 'Paris annulés/remboursés' })
+  voided!: number;
+  @ApiProperty({ example: 240, description: 'Total misé (toutes mises confondues)' })
+  totalStaked!: number;
+  @ApiProperty({ example: 35.5, description: 'Gains/pertes nets sur paris décidés' })
+  netResult!: number;
+  @ApiProperty({ example: 0.625, description: 'Taux de réussite (gagnés / décidés), 0..1' })
+  winRate!: number;
 }
 
 interface PlaceBetBody {
@@ -130,6 +150,17 @@ export class BettingController {
   })
   list(@CurrentUser() user: AuthUser): Promise<BetViewDto[]> {
     return this.queryBus.execute<ListBetsQuery, BetView[]>(new ListBetsQuery(user.userId));
+  }
+
+  @Get('stats')
+  @ApiOkResponse({
+    type: PlayerStatsDto,
+    description: 'Statistiques agrégées du joueur authentifié uniquement (read-model)',
+  })
+  stats(@CurrentUser() user: AuthUser): Promise<PlayerStatsDto> {
+    return this.queryBus.execute<PlayerStatsQuery, PlayerStatsView>(
+      new PlayerStatsQuery(user.userId),
+    );
   }
 
   @Get(':id')

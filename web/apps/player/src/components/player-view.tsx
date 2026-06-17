@@ -16,6 +16,7 @@ import {
   CardTitle,
   Skeleton,
   HistoryPanel,
+  StatsPanel,
 } from '@betnext/ui';
 import { OutcomeOddsButton } from '@/components/outcome-odds-button';
 import { BetSlip, type Selection } from '@/components/bet-slip';
@@ -215,6 +216,8 @@ export function PlayerView(): React.JSX.Element {
           <CapPanel />
         </aside>
       </div>
+
+      <StatsPanel refreshKey={refreshKey} />
 
       <HistoryPanel refreshKey={refreshKey} />
 

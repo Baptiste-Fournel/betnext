@@ -30,6 +30,7 @@ export { AppHeader } from './components/auth/app-header';
 export { AppShell } from './components/app-shell';
 
 export { HistoryPanel } from './components/history-panel';
+export { StatsPanel } from './components/stats-panel';
 
 export { api } from './lib/api/client';
 export { apiMessage } from './lib/api/error-message';

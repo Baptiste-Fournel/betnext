@@ -156,6 +156,35 @@
         ]
       }
     },
+    "/bets/stats": {
+      "get": {
+        "operationId": "BettingController_stats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Statistiques agrégées du joueur authentifié uniquement (read-model)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerStatsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token Bearer requis/invalide"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "bets"
+        ]
+      }
+    },
     "/bets/{id}": {
       "get": {
         "operationId": "BettingController_get",
@@ -925,6 +954,61 @@
           "lockedOdds",
           "potentialGain",
           "status"
+        ]
+      },
+      "PlayerStatsDto": {
+        "type": "object",
+        "properties": {
+          "totalBets": {
+            "type": "number",
+            "example": 12,
+            "description": "Nombre total de paris du joueur"
+          },
+          "pending": {
+            "type": "number",
+            "example": 3,
+            "description": "Paris en attente (indécis)"
+          },
+          "won": {
+            "type": "number",
+            "example": 5,
+            "description": "Paris gagnés"
+          },
+          "lost": {
+            "type": "number",
+            "example": 3,
+            "description": "Paris perdus"
+          },
+          "voided": {
+            "type": "number",
+            "example": 1,
+            "description": "Paris annulés/remboursés"
+          },
+          "totalStaked": {
+            "type": "number",
+            "example": 240,
+            "description": "Total misé (toutes mises confondues)"
+          },
+          "netResult": {
+            "type": "number",
+            "example": 35.5,
+            "description": "Gains/pertes nets sur paris décidés"
+          },
+          "winRate": {
+            "type": "number",
+            "example": 0.625,
+            "description": "Taux de réussite (gagnés / décidés), 0..1"
+          }
+        },
+        "required": [
+          "totalBets",
+          "pending",
+          "won",
+          "lost",
+          "voided",
+          "totalStaked",
+          "netResult",
+          "winRate"
         ]
       },
       "BetEventDto": {

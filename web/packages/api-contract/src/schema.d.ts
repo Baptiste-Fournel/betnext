@@ -68,6 +68,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/bets/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["BettingController_stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/bets/{id}": {
         parameters: {
             query?: never;
@@ -347,6 +363,48 @@ export interface components {
              * @enum {string}
              */
             status: "PENDING" | "WON" | "LOST" | "VOID" | "COMPENSATING" | "REFUNDED";
+        };
+        PlayerStatsDto: {
+            /**
+             * @description Nombre total de paris du joueur
+             * @example 12
+             */
+            totalBets: number;
+            /**
+             * @description Paris en attente (indécis)
+             * @example 3
+             */
+            pending: number;
+            /**
+             * @description Paris gagnés
+             * @example 5
+             */
+            won: number;
+            /**
+             * @description Paris perdus
+             * @example 3
+             */
+            lost: number;
+            /**
+             * @description Paris annulés/remboursés
+             * @example 1
+             */
+            voided: number;
+            /**
+             * @description Total misé (toutes mises confondues)
+             * @example 240
+             */
+            totalStaked: number;
+            /**
+             * @description Gains/pertes nets sur paris décidés
+             * @example 35.5
+             */
+            netResult: number;
+            /**
+             * @description Taux de réussite (gagnés / décidés), 0..1
+             * @example 0.625
+             */
+            winRate: number;
         };
         BetEventDto: {
             /** @example 1 */
@@ -760,6 +818,33 @@ export interface operations {
             };
             /** @description Même Idempotency-Key réutilisée avec un corps différent */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    BettingController_stats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Statistiques agrégées du joueur authentifié uniquement (read-model) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayerStatsDto"];
+                };
+            };
+            /** @description Token Bearer requis/invalide */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

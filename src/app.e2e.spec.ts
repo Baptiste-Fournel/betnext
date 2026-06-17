@@ -176,6 +176,72 @@ describe('BetNext API (e2e, auth BET-20)', () => {
     expect((listA.body as Array<{ userId: string }>).every((b) => b.userId === userIdA)).toBe(true);
   });
 
+  it('shouldReturn401_WhenGettingStatsWithoutToken', async () => {
+    // When / Then
+    await request(server()).get('/bets/stats').expect(401);
+  });
+
+  it('shouldReturnAggregatesScopedToCaller_WhenGettingStats', async () => {
+    // Given — un joueur dédié, jeu de paris connu : 2 gagnés / 1 perdu
+    await register('statUser').expect(201);
+    const { token } = await login('statUser');
+    const place = (key: string, outcomeId: string): request.Test =>
+      request(server())
+        .post('/bets')
+        .set('Authorization', `Bearer ${token}`)
+        .set('Idempotency-Key', key)
+        .send({ outcomeId, stake: 10 });
+    await place('stat-1', 'stat-win').expect(201);
+    await place('stat-2', 'stat-win').expect(201);
+    await place('stat-3', 'stat-lose').expect(201);
+    await request(server())
+      .post('/markets/settle')
+      .set(...auth(managerTok))
+      .send({ outcomes: ['stat-win', 'stat-lose'], winningOutcomeId: 'stat-win' })
+      .expect(200);
+
+    // When
+    const res = await request(server())
+      .get('/bets/stats')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    // Then — agrégat scopé au seul joueur, taux de réussite cohérent
+    expect(res.body).toMatchObject({
+      totalBets: 3,
+      won: 2,
+      lost: 1,
+      voided: 0,
+      pending: 0,
+      totalStaked: 30,
+    });
+    expect(res.body.winRate).toBeCloseTo(2 / 3, 4);
+  });
+
+  it('shouldReturnEmptyAggregates_WhenCallerHasNoBets', async () => {
+    // Given — un joueur sans aucun pari ne voit jamais les chiffres d'autrui
+    await register('emptyStatUser').expect(201);
+    const { token } = await login('emptyStatUser');
+
+    // When
+    const res = await request(server())
+      .get('/bets/stats')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    // Then
+    expect(res.body).toEqual({
+      totalBets: 0,
+      pending: 0,
+      won: 0,
+      lost: 0,
+      voided: 0,
+      totalStaked: 0,
+      netResult: 0,
+      winRate: 0,
+    });
+  });
+
   it('shouldReturn403ForPlayerAndAllowManager_WhenAccessingManagerEndpoints', async () => {
     // When / Then
     await request(server())
