@@ -56,7 +56,6 @@ export class InMemoryWalletAdapter
     this.record(opKey, userId, amount);
   }
 
-  // Reverse de crédit (compensation de saga), idempotent par opKey, ligne ledger signée négative.
   async refund(userId: string, amount: number, opKey: string): Promise<void> {
     if (this.appliedOps.has(opKey)) {
       return;

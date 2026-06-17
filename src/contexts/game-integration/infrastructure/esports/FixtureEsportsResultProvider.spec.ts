@@ -7,7 +7,7 @@ describe('FixtureEsportsResultProvider (BET-32)', () => {
       'esports-fixture-lec-g2-fnc',
     );
 
-    // Assert — preuve de règlement auto déterministe en démo
+    // Assert
     expect(report).toEqual({
       matchId: 'esports-fixture-lec-g2-fnc',
       status: 'FINISHED',

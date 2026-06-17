@@ -1,7 +1,5 @@
 import { EsportsFeedScheduler, FeedIngestor, FeedResultsSync } from './EsportsFeedScheduler';
 
-// Faux use cases qui enregistrent l'ordre des appels (zéro réseau). On ne déclenche QUE les
-// use cases existants : ingestion idempotente + synchro résultats exactly-once.
 const recorder = (): {
   calls: string[];
   ingest: FeedIngestor;
@@ -35,12 +33,12 @@ describe('EsportsFeedScheduler (BET-33)', () => {
     // Act
     await scheduler.runOnce();
 
-    // Assert — ingestion d'abord, synchro résultats ensuite
+    // Assert
     expect(r.calls).toEqual(['ingest', 'results']);
   });
 
   it('shouldNotScheduleNorCallUseCases_WhenDisabled', () => {
-    // Arrange — désactivé (cas par défaut en test/CI : jamais d'appel à l'API externe)
+    // Arrange
     const r = recorder();
     const setIntervalSpy = jest.spyOn(global, 'setInterval');
     const scheduler = new EsportsFeedScheduler(r.ingest, r.results, {
@@ -51,14 +49,14 @@ describe('EsportsFeedScheduler (BET-33)', () => {
     // Act
     scheduler.onApplicationBootstrap();
 
-    // Assert — aucun timer armé, aucun use case déclenché
+    // Assert
     expect(setIntervalSpy).not.toHaveBeenCalled();
     expect(r.calls).toEqual([]);
     setIntervalSpy.mockRestore();
   });
 
   it('shouldIsolateIngestionFailureAndStillSyncResults_WhenIngestThrows', async () => {
-    // Arrange — l'ingestion échoue (feed down) ; la synchro résultats doit quand même tourner
+    // Arrange
     const calls: string[] = [];
     const ingest: FeedIngestor = {
       execute: async () => {
@@ -75,7 +73,7 @@ describe('EsportsFeedScheduler (BET-33)', () => {
       intervalMs: 1000,
     });
 
-    // Act — le run ne doit jamais rejeter (sinon unhandledRejection / app cassée)
+    // Act
     await expect(scheduler.runOnce()).resolves.toBeUndefined();
 
     // Assert
@@ -83,7 +81,7 @@ describe('EsportsFeedScheduler (BET-33)', () => {
   });
 
   it('shouldKeepRunningAfterFailingRun_WhenNextTickFires', async () => {
-    // Arrange — un run KO ne doit pas bloquer les suivants
+    // Arrange
     let attempt = 0;
     const calls: string[] = [];
     const ingest: FeedIngestor = {
@@ -106,15 +104,15 @@ describe('EsportsFeedScheduler (BET-33)', () => {
     });
 
     // Act
-    await scheduler.runOnce(); // KO sur l'ingestion
-    await scheduler.runOnce(); // le suivant repart normalement
+    await scheduler.runOnce();
+    await scheduler.runOnce();
 
-    // Assert — 1er run : ingestion KO mais results OK ; 2e run : tout OK
+    // Assert
     expect(calls).toEqual(['results', 'ingest', 'results']);
   });
 
   it('shouldNotRunConcurrently_WhenPreviousRunStillInFlight', async () => {
-    // Arrange — un run en cours bloque tout chevauchement (anti-double déclenchement)
+    // Arrange
     let release: () => void = () => undefined;
     let ingestCalls = 0;
     const ingest: FeedIngestor = {
@@ -130,15 +128,14 @@ describe('EsportsFeedScheduler (BET-33)', () => {
       intervalMs: 1000,
     });
 
-    // Act — premier run bloqué sur l'ingestion, on tente un second en parallèle
+    // Act
     const first = scheduler.runOnce();
-    const second = scheduler.runOnce(); // doit ressortir immédiatement (run déjà en cours)
+    const second = scheduler.runOnce();
     await second;
 
-    // Assert — le second n'a pas relancé l'ingestion
+    // Assert
     expect(ingestCalls).toBe(1);
 
-    // Cleanup — on débloque le premier run
     release();
     await first;
     expect(ingestCalls).toBe(1);
@@ -154,7 +151,7 @@ describe('EsportsFeedScheduler (BET-33)', () => {
         intervalMs: 1000,
       });
 
-      // Act — démarrage : un tick à chaque intervalle
+      // Act
       scheduler.onApplicationBootstrap();
       await jest.advanceTimersByTimeAsync(1000);
       expect(r.calls).toEqual(['ingest', 'results']);
@@ -162,7 +159,7 @@ describe('EsportsFeedScheduler (BET-33)', () => {
       await jest.advanceTimersByTimeAsync(1000);
       expect(r.calls).toEqual(['ingest', 'results', 'ingest', 'results']);
 
-      // Act — arrêt propre : plus aucun tick après destroy
+      // Act
       await scheduler.onModuleDestroy();
       await jest.advanceTimersByTimeAsync(5000);
 

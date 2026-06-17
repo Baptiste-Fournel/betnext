@@ -9,9 +9,6 @@ export interface DepositCompensatedEvent {
   reason: DepositCompensationReason;
 }
 
-// Notifie l'utilisateur qu'un dépôt a été compensé (remboursé). Écrit DANS la transaction de
-// compensation (Outbox transactionnel) → la notif est commitée atomiquement avec le reverse :
-// pas de reverse sans notif, pas de notif fantôme. Au moins une fois (consommateur idempotent).
 export interface DepositNotificationPort {
   notifyDepositCompensated(event: DepositCompensatedEvent): Promise<void>;
 }

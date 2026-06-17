@@ -12,7 +12,7 @@ describe("OpeningOdds (ligne d'ouverture — source unique cote affichée + cote
   });
 
   it('shouldKeepOpeningWithinAllowedRange_WhenComparedToOddsBounds', () => {
-    // Assert — une ligne d'ouverture hors bornes casserait Odds.of() et donc le pari
+    // Assert
     expect(OPENING_ODDS_VALUE).toBeGreaterThanOrEqual(Odds.MIN);
     expect(OPENING_ODDS_VALUE).toBeLessThanOrEqual(Odds.MAX);
   });

@@ -10,7 +10,7 @@ describe("OddsReadController (cote courante — read-model + ligne d'ouverture)"
     // Act
     const result = await controller.current('lol-finale-a');
 
-    // Assert — plus de 404 : on sert la ligne d'ouverture, marquée opening
+    // Assert
     expect(result).toEqual({ outcomeId: 'lol-finale-a', odds: OPENING_ODDS_VALUE, opening: true });
   });
 
@@ -23,7 +23,7 @@ describe("OddsReadController (cote courante — read-model + ligne d'ouverture)"
     // Act
     const result = await controller.current('lol-finale-a');
 
-    // Assert — cote pilotée par le volume, opening=false
+    // Assert
     expect(result).toEqual({ outcomeId: 'lol-finale-a', odds: 3.2, opening: false });
   });
 });

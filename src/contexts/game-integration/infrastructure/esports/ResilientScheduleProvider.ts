@@ -11,8 +11,6 @@ export interface ScheduleResilienceOptions {
   baseDelayMs: number;
 }
 
-// Durcit les appels à la source externe (instable) : timeout + retry exponentiel. Si tout
-// échoue, l'erreur remonte au FallbackEsportsScheduleProvider qui bascule sur les fixtures.
 export class ResilientScheduleProvider implements EsportsScheduleProvider {
   constructor(
     private readonly inner: EsportsScheduleProvider,

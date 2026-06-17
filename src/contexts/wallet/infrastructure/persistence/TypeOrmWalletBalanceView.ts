@@ -2,7 +2,6 @@ import { DataSource } from 'typeorm';
 import { WalletBalanceView } from '../../application/ports/WalletBalanceView';
 import { WalletRecord } from './WalletRecord';
 
-// Lecture seule du solde (read-side). Hors transaction d'écriture : simple SELECT.
 export class TypeOrmWalletBalanceView implements WalletBalanceView {
   constructor(private readonly dataSource: DataSource) {}
 

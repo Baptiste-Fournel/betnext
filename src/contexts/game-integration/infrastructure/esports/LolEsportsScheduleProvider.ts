@@ -4,8 +4,6 @@ import {
   ScheduledMatch,
 } from '../../application/ports/EsportsScheduleProvider';
 
-// Forme BRUTE de la réponse LoL Esports (API non-officielle). Confinée à cet adapter : c'est
-// l'anti-corruption layer. Rien de ce vocabulaire externe ne franchit le port.
 interface RawScheduleResponse {
   data?: { schedule?: { events?: RawEvent[] } };
 }
@@ -32,7 +30,6 @@ export class LolEsportsScheduleProvider implements EsportsScheduleProvider {
 
   async fetchUpcoming(): Promise<EsportsSchedule> {
     const hl = this.options.hl ?? 'en-US';
-    // Clé en header (jamais dans l'URL ni loggée), base URL injectée depuis la config/ENV.
     const res = await fetch(
       `${this.baseUrl}/persisted/gw/getSchedule?hl=${encodeURIComponent(hl)}`,
       { headers: { 'x-api-key': this.apiKey } },
@@ -53,8 +50,6 @@ export class LolEsportsScheduleProvider implements EsportsScheduleProvider {
     return { source: 'live', matches };
   }
 
-  // Projette un événement externe sur NOTRE type domaine, ou null si non éligible
-  // (déjà joué, adversaire inconnu, données manquantes).
   private toScheduledMatch(event: RawEvent): ScheduledMatch | null {
     if (event.state !== 'unstarted') {
       return null;

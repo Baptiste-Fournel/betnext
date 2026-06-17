@@ -30,7 +30,7 @@ class CountingGateway implements PaymentGateway {
 
 describe('ResilientPaymentGateway (BET-17) — durcissement des appels PSP (défi 3)', () => {
   it('shouldOpenCircuitAndFailFast_WhenStripeKeepsFailing', async () => {
-    // Arrange — PSP en panne, breaker à 2 échecs, pas de retry pour compter précisément
+    // Arrange
     const inner = new CountingGateway('down');
     const breaker = new CircuitBreaker({
       failureThreshold: 2,
@@ -43,18 +43,18 @@ describe('ResilientPaymentGateway (BET-17) — durcissement des appels PSP (déf
       baseDelayMs: 1,
     });
 
-    // Act — deux échecs ouvrent le circuit
+    // Act
     await expect(gateway.charge(charge())).rejects.toThrow('stripe 500');
     await expect(gateway.charge(charge())).rejects.toThrow('stripe 500');
 
-    // Assert — le 3e appel est court-circuité : aucune charge réelle tentée (fail fast)
+    // Assert
     await expect(gateway.charge(charge())).rejects.toBeInstanceOf(CircuitOpenError);
     expect(breaker.currentState).toBe('OPEN');
     expect(inner.charges).toBe(2);
   });
 
   it('shouldRetryThenSucceed_WhenTransientStripeError', async () => {
-    // Arrange — premier appel KO, second OK (panne transitoire)
+    // Arrange
     let calls = 0;
     const inner: PaymentGateway = {
       charge: (): Promise<ChargeResult> => {
@@ -73,7 +73,7 @@ describe('ResilientPaymentGateway (BET-17) — durcissement des appels PSP (déf
       baseDelayMs: 1,
     });
 
-    // Act / Assert — le retry absorbe la panne transitoire
+    // Act / Assert
     await expect(gateway.charge(charge())).resolves.toMatchObject({ status: 'SUCCEEDED' });
     expect(calls).toBe(2);
   });

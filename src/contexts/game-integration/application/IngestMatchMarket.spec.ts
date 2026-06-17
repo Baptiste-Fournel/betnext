@@ -18,7 +18,6 @@ const recordingStore = (): MatchLinkStore & { saved: MatchLink[] } => {
   };
 };
 
-// Reproduit le contrat du catalog (un id d'issue par label, dans l'ordre).
 const recordingMarkets = (): MarketCreationPort & { calls: MarketCreationRequest[] } => {
   const calls: MarketCreationRequest[] = [];
   return {
@@ -58,7 +57,7 @@ describe('IngestMatchMarket (BET-30)', () => {
       ],
     });
 
-    // Assert — le marché est créé avec les libellés dans l'ordre fourni
+    // Assert
     expect(markets.calls).toEqual([
       {
         name: 'G2 Esports vs Fnatic',
@@ -66,13 +65,11 @@ describe('IngestMatchMarket (BET-30)', () => {
         outcomeLabels: ['Victoire G2 Esports', 'Victoire Fnatic'],
       },
     ]);
-    // le mapping côté→issue est aligné par index (consommé par le moteur de règlement)
     expect(result.mapping).toEqual({ HOME: 'mkt-generated-1', AWAY: 'mkt-generated-2' });
     expect(result.marketId).toBe('mkt-generated');
     expect(result.league).toBe('LEC');
     expect(result.startTime).toBe('2026-06-28T03:00:00Z');
     expect(result.outcomes).toEqual(['mkt-generated-1', 'mkt-generated-2']);
-    // le lien enregistré est cohérent avec ce que SyncMatchResult attend
     expect(store.saved).toEqual([
       {
         matchId: '115570934355614497',
@@ -112,7 +109,7 @@ describe('IngestMatchMarket (BET-30)', () => {
     const markets = recordingMarkets();
     const store = recordingStore();
 
-    // Act / Assert — aucun marché ne doit être créé si le lien ne peut pas être formé
+    // Act / Assert
     await expect(
       new IngestMatchMarket(markets, store).execute({
         name: 'x',

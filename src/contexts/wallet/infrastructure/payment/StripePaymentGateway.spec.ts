@@ -20,7 +20,7 @@ const fakeFetch = (status: number, json: unknown, sink: Captured[]): FetchLike =
 
 describe('StripePaymentGateway (BET-17) — adapter réel (mode test), ACL anti-corruption', () => {
   it('shouldMapToDomainShapeWithoutLeakingStripeFields_WhenChargeSucceeds', async () => {
-    // Arrange — réponse BRUTE Stripe (vocabulaire externe)
+    // Arrange
     const calls: Captured[] = [];
     const stripeRaw = {
       id: 'pi_123',
@@ -41,7 +41,7 @@ describe('StripePaymentGateway (BET-17) — adapter réel (mode test), ACL anti-
       reference: 'p1:d1',
     });
 
-    // Assert — forme DOMAINE pure : aucun champ Stripe ne fuit
+    // Assert
     expect(Object.keys(result).sort()).toEqual(['chargeId', 'status']);
     expect(result).toEqual({ chargeId: 'pi_123', status: 'SUCCEEDED' });
   });
@@ -62,7 +62,7 @@ describe('StripePaymentGateway (BET-17) — adapter réel (mode test), ACL anti-
       reference: 'p1:d1',
     });
 
-    // Assert — montant en cents, clé d'idempotence transmise, secret en Bearer
+    // Assert
     const { url, init } = calls[0];
     expect(url).toContain('/v1/payment_intents');
     expect(init.body).toContain('amount=5000');
@@ -71,7 +71,7 @@ describe('StripePaymentGateway (BET-17) — adapter réel (mode test), ACL anti-
   });
 
   it('shouldThrowWithoutLeakingSecret_WhenStripeReturnsError', async () => {
-    // Arrange — Stripe répond 402, le message d'erreur NE DOIT PAS contenir la clé
+    // Arrange
     const calls: Captured[] = [];
     const gateway = new StripePaymentGateway(
       SECRET,
@@ -97,7 +97,7 @@ describe('StripePaymentGateway (BET-17) — adapter réel (mode test), ACL anti-
   });
 
   it('shouldThrow_WhenChargeNotSucceeded', async () => {
-    // Arrange — un intent 200 mais status != succeeded n'est PAS une charge encaissée
+    // Arrange
     const calls: Captured[] = [];
     const gateway = new StripePaymentGateway(
       SECRET,
@@ -130,7 +130,7 @@ describe('StripePaymentGateway (BET-17) — adapter réel (mode test), ACL anti-
       idempotencyKey: 'refund:d1',
     });
 
-    // Assert — forme domaine + remboursement rattaché au payment_intent, clé d'idempotence
+    // Assert
     expect(Object.keys(result).sort()).toEqual(['refundId', 'status']);
     expect(result).toEqual({ refundId: 're_1', status: 'REFUNDED' });
     const { url, init } = calls[0];

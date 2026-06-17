@@ -10,7 +10,7 @@ describe('ExactScoreStrategy (nouveau type de pari ajouté via la couture — BE
   const strategy = new ExactScoreStrategy();
 
   it('shouldExposeTheExactScoreKey_WhenRegisteredInTheFactory', () => {
-    // Act / Assert — la clé sert d'enregistrement (betting.module.ts), sans toucher l'existant
+    // Act / Assert
     expect(strategy.key).toBe(EXACT_SCORE_STRATEGY);
   });
 
@@ -39,7 +39,7 @@ describe('ExactScoreStrategy (nouveau type de pari ajouté via la couture — BE
   });
 
   it('shouldThrowDomainErrorNeverLosingSilently_WhenNoWinningScorelineButNotVoided', () => {
-    // Act / Assert — money-safe : pas de score concret = erreur de donnée, jamais « tout LOST »
+    // Act / Assert
     expect(() => strategy.decide(bet('2-1'), { winningOutcomeId: null, voided: false })).toThrow(
       DomainError,
     );

@@ -13,7 +13,7 @@ describe('StubPaymentGateway (BET-17) — PSP déterministe, idempotent (tests +
       reference: 'player-1',
     });
 
-    // Assert — forme 100 % domaine, aucun champ Stripe
+    // Assert
     expect(result.status).toBe('SUCCEEDED');
     expect(typeof result.chargeId).toBe('string');
     expect(Object.keys(result).sort()).toEqual(['chargeId', 'status']);
@@ -30,11 +30,11 @@ describe('StubPaymentGateway (BET-17) — PSP déterministe, idempotent (tests +
       reference: 'player-1',
     };
 
-    // Act — retry réseau : même clé d'idempotence
+    // Act
     const first = await gateway.charge(req);
     const second = await gateway.charge(req);
 
-    // Assert — une seule charge réelle, même identifiant
+    // Assert
     expect(second.chargeId).toBe(first.chargeId);
     expect(gateway.chargeCount).toBe(1);
   });
@@ -43,7 +43,7 @@ describe('StubPaymentGateway (BET-17) — PSP déterministe, idempotent (tests +
     // Arrange
     const gateway = new StubPaymentGateway({ failCharge: true });
 
-    // Act / Assert — simule un PSP en panne (utilisé pour breaker + compensation)
+    // Act / Assert
     await expect(
       gateway.charge({
         amount: 50,
@@ -66,11 +66,11 @@ describe('StubPaymentGateway (BET-17) — PSP déterministe, idempotent (tests +
     });
     const refundReq = { chargeId: charge.chargeId, amount: 50, idempotencyKey: 'refund:d1' };
 
-    // Act — compensation rejouée
+    // Act
     const first = await gateway.refund(refundReq);
     const second = await gateway.refund(refundReq);
 
-    // Assert — un seul remboursement réel
+    // Assert
     expect(second.refundId).toBe(first.refundId);
     expect(second.status).toBe('REFUNDED');
     expect(gateway.refundCount).toBe(1);

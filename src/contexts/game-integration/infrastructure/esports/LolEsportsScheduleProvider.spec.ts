@@ -1,7 +1,5 @@
 import { LolEsportsScheduleProvider } from './LolEsportsScheduleProvider';
 
-// Réponse au format LoL Esports (non-officielle) — volontairement bruitée pour prouver que
-// l'ACL ne laisse PAS fuiter ce format dans le domaine.
 const rawSchedule = {
   data: {
     schedule: {
@@ -21,7 +19,7 @@ const rawSchedule = {
         },
         {
           startTime: '2026-06-10T10:00:00Z',
-          state: 'completed', // déjà joué → exclu
+          state: 'completed',
           league: { name: 'LEC' },
           match: { id: 'done-1', teams: [{ name: 'G2' }, { name: 'FNC' }] },
         },
@@ -29,7 +27,7 @@ const rawSchedule = {
           startTime: '2026-06-29T10:00:00Z',
           state: 'unstarted',
           league: { name: 'VCS' },
-          match: { id: 'tbd-1', teams: [{ name: 'TBD' }, { name: 'Saigon Warrior' }] }, // adversaire inconnu → exclu
+          match: { id: 'tbd-1', teams: [{ name: 'TBD' }, { name: 'Saigon Warrior' }] },
         },
       ],
     },
@@ -60,7 +58,7 @@ describe('LolEsportsScheduleProvider — ACL LoL Esports → domaine (BET-30)', 
     // Act
     const schedule = await provider.fetchUpcoming();
 
-    // Assert — un seul match retenu, projeté sur NOS champs (aucun champ externe ne fuit)
+    // Assert
     expect(schedule.source).toBe('live');
     expect(schedule.matches).toEqual([
       {
@@ -72,7 +70,6 @@ describe('LolEsportsScheduleProvider — ACL LoL Esports → domaine (BET-30)', 
         startTime: '2026-06-28T03:00:00Z',
       },
     ]);
-    // garde anti-fuite : pas de strategy/image/code/slug du format externe
     expect(JSON.stringify(schedule.matches)).not.toMatch(/strategy|image|slug|bestOf/);
   });
 
@@ -84,7 +81,7 @@ describe('LolEsportsScheduleProvider — ACL LoL Esports → domaine (BET-30)', 
     // Act
     await provider.fetchUpcoming();
 
-    // Assert — la clé passe en header (jamais dans l'URL/les logs) et l'endpoint est le bon
+    // Assert
     const [url, options] = spy.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/persisted/gw/getSchedule');
     expect(url).not.toContain('public-key');
@@ -96,12 +93,12 @@ describe('LolEsportsScheduleProvider — ACL LoL Esports → domaine (BET-30)', 
     jest.spyOn(global, 'fetch').mockImplementation(fetchReturning({}, { ok: false, status: 503 }));
     const provider = new LolEsportsScheduleProvider('https://esports-api.example', 'public-key');
 
-    // Act / Assert — l'échec remonte (le décorateur résilient + fallback le rattraperont)
+    // Act / Assert
     await expect(provider.fetchUpcoming()).rejects.toThrow(/503/);
   });
 
   it('shouldCapToConfiguredLimit_WhenMoreUpcomingThanLimit', async () => {
-    // Arrange — 3 matchs à venir bien formés, limite à 2
+    // Arrange
     const many = {
       data: {
         schedule: {
@@ -122,7 +119,7 @@ describe('LolEsportsScheduleProvider — ACL LoL Esports → domaine (BET-30)', 
     // Act
     const schedule = await provider.fetchUpcoming();
 
-    // Assert — les 2 plus proches uniquement
+    // Assert
     expect(schedule.matches.map((m) => m.externalId)).toEqual(['m-1', 'm-2']);
   });
 });

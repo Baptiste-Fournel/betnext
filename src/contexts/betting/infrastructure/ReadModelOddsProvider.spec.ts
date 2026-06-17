@@ -22,7 +22,7 @@ describe('ReadModelOddsProvider (cote courante lue depuis le read-model)', () =>
     // Act
     const result = await provider.currentOdds('o1');
 
-    // Assert — money-safety : la cote figée au pari == la ligne d'ouverture affichée (source unique)
+    // Assert
     expect(result.value.value).toBe(openingOdds().value);
   });
 

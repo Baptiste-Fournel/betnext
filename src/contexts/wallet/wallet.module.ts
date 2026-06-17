@@ -35,9 +35,6 @@ import { ReconciliationController } from './infrastructure/http/ReconciliationCo
 import { WalletController } from './infrastructure/http/WalletController';
 import { DepositController } from './infrastructure/http/DepositController';
 
-// Sélection PSP par config (ENV), pattern Riot/esports : sans `STRIPE_SECRET_KEY` → stub
-// déterministe (CI/démo hors-ligne, sans clé) ; avec → adapter Stripe RÉEL (mode test) durci par
-// circuit breaker + timeout + retry. La clé n'est lue qu'ici et passée à l'adapter — jamais loggée.
 const buildPaymentGateway = (): PaymentGateway => {
   const secret = process.env.STRIPE_SECRET_KEY;
   if (!secret) {
@@ -107,7 +104,6 @@ const buildPaymentGateway = (): PaymentGateway => {
       useFactory: (view: WalletLedgerView): ReconcileWallets => new ReconcileWallets(view),
       inject: [WALLET_LEDGER_VIEW],
     },
-    // --- Dépôt par paiement externe (Stripe) : Saga + compensation (BET-17 / ADR-004) ---
     {
       provide: PAYMENT_GATEWAY,
       useFactory: (): PaymentGateway => buildPaymentGateway(),

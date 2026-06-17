@@ -57,7 +57,7 @@ describe('GetPlayerStatsHandler (read-model stats, scoping anti-IDOR)', () => {
   });
 
   it('shouldComputeTotalStakedAndNetResult_WhenPlayerHasSettledBets', async () => {
-    // Arrange — WON: +(40-20)=+20 ; LOST: -10 ; VOID: 0 (mise rendue) ; PENDING: indécis
+    // Arrange
     const handler = new GetPlayerStatsHandler(
       new ScopedBetRepository([
         betOf('u1', BetStatus.Won, 20, 2),
@@ -76,7 +76,7 @@ describe('GetPlayerStatsHandler (read-model stats, scoping anti-IDOR)', () => {
   });
 
   it('shouldComputeWinRateOverDecidedBets_WhenPlayerHasWonAndLost', async () => {
-    // Arrange — 2 gagnés / 1 perdu sur 3 décidés ; void et pending hors taux
+    // Arrange
     const handler = new GetPlayerStatsHandler(
       new ScopedBetRepository([
         betOf('u1', BetStatus.Won, 20, 2),
@@ -115,7 +115,7 @@ describe('GetPlayerStatsHandler (read-model stats, scoping anti-IDOR)', () => {
   });
 
   it('shouldNotDivideByZero_WhenNoDecidedBets', async () => {
-    // Arrange — que des paris en attente / annulés : aucun pari décidé
+    // Arrange
     const handler = new GetPlayerStatsHandler(
       new ScopedBetRepository([
         betOf('u1', BetStatus.Pending, 8, 1.5),
@@ -131,7 +131,7 @@ describe('GetPlayerStatsHandler (read-model stats, scoping anti-IDOR)', () => {
   });
 
   it('shouldAggregateOnlyRequesterBets_WhenOtherUsersHaveBets', async () => {
-    // Arrange — les paris d'un autre joueur ne doivent jamais entrer dans l'agrégat
+    // Arrange
     const handler = new GetPlayerStatsHandler(
       new ScopedBetRepository([
         betOf('u1', BetStatus.Won, 20, 2),

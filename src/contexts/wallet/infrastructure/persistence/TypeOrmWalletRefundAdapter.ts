@@ -3,9 +3,6 @@ import { WalletRefundPort } from '../../application/ports/WalletRefundPort';
 import { TransactionContext } from '../../../../persistence/TransactionContext';
 import { WalletRecord } from './WalletRecord';
 
-// Reverse de crédit (compensation) : ligne ledger signée NÉGATIVE (kind `REFUND`) + décrément du
-// solde, dans la MÊME transaction (UnitOfWork). Idempotent par `opKey` (ON CONFLICT DO NOTHING) →
-// un rejeu de compensation ne re-débite jamais. Σ(ledger) == solde reste vrai à chaque commit.
 export class TypeOrmWalletRefundAdapter implements WalletRefundPort {
   constructor(private readonly context: TransactionContext) {}
 

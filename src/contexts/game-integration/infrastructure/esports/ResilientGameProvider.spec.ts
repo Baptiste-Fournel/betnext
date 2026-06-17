@@ -16,7 +16,7 @@ class FakeProvider implements GameProvider {
 
 describe('ResilientGameProvider (BET-32)', () => {
   it('shouldRetryThenSucceed_WhenFirstAttemptFails', async () => {
-    // Arrange — échec puis succès
+    // Arrange
     const fake = new FakeProvider((call) =>
       call === 1 ? Promise.reject(new Error('flaky')) : Promise.resolve(finished),
     );
@@ -48,7 +48,7 @@ describe('ResilientGameProvider (BET-32)', () => {
       baseDelayMs: 0,
     });
 
-    // Act / Assert — après assez d'échecs, le circuit s'ouvre et court-circuite
+    // Act / Assert
     await expect(provider.fetchMatchReport('m')).rejects.toThrow('source down');
     await expect(provider.fetchMatchReport('m')).rejects.toThrow('source down');
     expect(breaker.currentState).toBe('OPEN');

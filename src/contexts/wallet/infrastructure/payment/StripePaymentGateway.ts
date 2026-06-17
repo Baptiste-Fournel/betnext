@@ -6,7 +6,6 @@ import {
   RefundResult,
 } from '../../application/ports/PaymentGateway';
 
-// Sous-ensemble de `fetch` réellement utilisé — injectable pour tester sans réseau.
 export type FetchLike = (
   url: string,
   init?: {
@@ -16,8 +15,6 @@ export type FetchLike = (
   },
 ) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
 
-// Forme BRUTE Stripe, CONFINÉE à cet adapter (ACL). Rien de ce vocabulaire (`id`, `status:
-// 'succeeded'`, `client_secret`, `latest_charge`…) ne franchit le port PaymentGateway.
 interface StripeObject {
   id?: string;
   status?: string;
@@ -26,10 +23,6 @@ interface StripeObject {
 
 const STRIPE_API = 'https://api.stripe.com';
 
-// Adapter Stripe RÉEL (mode test). Activé uniquement si `STRIPE_SECRET_KEY` est présent (sélection
-// dans le module, pattern Riot/esports). La clé secrète ne sert qu'en en-tête Authorization : elle
-// n'est JAMAIS loggée, ni mise en URL, ni renvoyée. Montants convertis en cents ICI (ACL) : le
-// domaine reste en euros. La clé d'idempotence Stripe rend charge/refund exactly-once.
 export class StripePaymentGateway implements PaymentGateway {
   constructor(
     private readonly secretKey: string,
@@ -41,7 +34,7 @@ export class StripePaymentGateway implements PaymentGateway {
       amount: String(this.toMinorUnits(request.amount)),
       currency: request.currency,
       confirm: 'true',
-      payment_method: 'pm_card_visa', // moyen de paiement de TEST Stripe (carte qui réussit)
+      payment_method: 'pm_card_visa',
       'automatic_payment_methods[enabled]': 'true',
       'automatic_payment_methods[allow_redirects]': 'never',
       description: `BetNext deposit ${request.reference}`,
@@ -82,7 +75,6 @@ export class StripePaymentGateway implements PaymentGateway {
     });
     const payload = (await res.json().catch(() => ({}))) as StripeObject;
     if (!res.ok) {
-      // Message d'erreur SANS secret ni corps complet : juste l'op, le code et le message Stripe.
       const detail = payload.error?.message ?? '';
       throw new Error(
         `Appel Stripe (${op}) en échec (HTTP ${res.status})${detail ? ` : ${detail}` : ''}`,

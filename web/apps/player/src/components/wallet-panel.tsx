@@ -27,7 +27,6 @@ export function WalletPanel({
   refreshKey,
 }: {
   onDeposited?: () => void;
-  // Incrémenté par le parent quand le solde a pu changer ailleurs (ex. pari placé) → recharge.
   refreshKey?: number;
 }): React.JSX.Element {
   const [balance, setBalance] = useState<number | null | undefined>(undefined);
@@ -36,7 +35,6 @@ export function WalletPanel({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [justCredited, setJustCredited] = useState<number | null>(null);
-  // Clé d'idempotence STABLE par tentative (même montant) → un retry réseau ne re-charge jamais.
   const attempt = useRef<{ key: string; sig: string } | null>(null);
 
   const load = useCallback(async () => {

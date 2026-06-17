@@ -51,7 +51,7 @@ describe('FallbackEsportsScheduleProvider (BET-30)', () => {
     // Act
     const schedule = await provider.fetchUpcoming();
 
-    // Assert — l'app ne casse pas : on sert des fixtures réalistes et on signale le mode dégradé
+    // Assert
     expect(schedule.source).toBe('fixtures');
     expect(schedule.matches.length).toBeGreaterThan(0);
     expect(schedule.matches[0].league).toBe('LEC');

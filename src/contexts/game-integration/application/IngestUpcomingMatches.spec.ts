@@ -24,7 +24,6 @@ const recordingStore = (): MatchLinkStore & { saved: MatchLink[] } => {
   };
 };
 
-// Reproduit le contrat du catalog (un id d'issue par label, dans l'ordre) — comme IngestMatchMarket.spec.
 const recordingMarkets = (): MarketCreationPort & { calls: MarketCreationRequest[] } => {
   const calls: MarketCreationRequest[] = [];
   let seq = 0;
@@ -85,7 +84,7 @@ describe('IngestUpcomingMatches (BET-30)', () => {
     // Act
     const summary = await ingest.execute();
 
-    // Assert — un marché LoL à 2 issues (Victoire A / Victoire B) par match, libellés mappés
+    // Assert
     expect(summary).toMatchObject({ source: 'live', total: 2, ingested: 2, skipped: 0, failed: 0 });
     expect(markets.calls).toEqual([
       {
@@ -99,7 +98,6 @@ describe('IngestUpcomingMatches (BET-30)', () => {
         outcomeLabels: ['Victoire Karmine Corp', 'Victoire DCG'],
       },
     ]);
-    // le lien porte l'externalId comme clé + le mapping côté→issue (pour le règlement) + ligue + kickoff
     expect(store.saved[0]).toEqual({
       matchId: '115570934355614497',
       marketId: 'mkt-1',
@@ -111,7 +109,7 @@ describe('IngestUpcomingMatches (BET-30)', () => {
   });
 
   it('shouldSkipAlreadyIngestedMatchesAndCreateNoNewMarket_WhenReingestingSameSchedule', async () => {
-    // Arrange — même planning ingéré deux fois
+    // Arrange
     const markets = recordingMarkets();
     const store = recordingStore();
     const ingest = new IngestUpcomingMatches(
@@ -124,14 +122,14 @@ describe('IngestUpcomingMatches (BET-30)', () => {
     await ingest.execute();
     const second = await ingest.execute();
 
-    // Assert — idempotent : aucun marché dupliqué au second passage
+    // Assert
     expect(second).toMatchObject({ total: 2, ingested: 0, skipped: 2 });
     expect(markets.calls).toHaveLength(2);
     expect(store.saved).toHaveLength(2);
   });
 
   it('shouldDegradeWithoutCreatingMarketsAndKeepExistingIntact_WhenFeedThrows', async () => {
-    // Arrange — feed totalement injoignable (même le fallback échoue)
+    // Arrange
     const markets = recordingMarkets();
     const store = recordingStore();
     await store.save({
@@ -154,7 +152,7 @@ describe('IngestUpcomingMatches (BET-30)', () => {
     // Act
     const summary = await ingest.execute();
 
-    // Assert — l'app ne casse pas : aucun marché créé, le lien existant est intact
+    // Assert
     expect(summary).toMatchObject({ total: 0, ingested: 0, skipped: 0, failed: 0 });
     expect(markets.calls).toHaveLength(0);
     expect(store.saved).toEqual([
@@ -179,13 +177,13 @@ describe('IngestUpcomingMatches (BET-30)', () => {
     // Act
     const summary = await ingest.execute();
 
-    // Assert — le mode dégradé est signalé à l'appelant
+    // Assert
     expect(summary.source).toBe('fixtures');
     expect(summary.ingested).toBe(1);
   });
 
   it('shouldCountFailureAndKeepIngestingOthers_WhenOneMatchIsMalformed', async () => {
-    // Arrange — un match sans externalId fait échouer l'ingestion mais ne stoppe pas le reste
+    // Arrange
     const markets = recordingMarkets();
     const store = recordingStore();
     const malformed: ScheduledMatch = { ...T1_VS_TL, externalId: '   ' };

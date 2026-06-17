@@ -14,7 +14,7 @@ describe('CatalogMarketCreation (BET-29)', () => {
       outcomeLabels: ['Victoire G2', 'Victoire FNC', 'Match nul'],
     });
 
-    // Assert — id de marché + ids d'issues alignés sur l'ordre des labels
+    // Assert
     expect(created.name).toBe('G2 vs FNC');
     expect(created.outcomes.map((o) => o.label)).toEqual([
       'Victoire G2',

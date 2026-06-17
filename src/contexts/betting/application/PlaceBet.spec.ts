@@ -74,7 +74,7 @@ describe('PlaceBet (use case hexagonal)', () => {
   });
 
   it('shouldFreezeOpeningOddsIntoLockedOdds_WhenMarketHasNoVolume', async () => {
-    // Arrange — provider renvoie la ligne d'ouverture, marquée provisoire (read-model froid)
+    // Arrange
     const bets = new InMemoryBets();
     const wallet = new SpyWallet();
     const provider: OddsProvider = {
@@ -85,7 +85,7 @@ describe('PlaceBet (use case hexagonal)', () => {
     // Act
     const out = await useCase.execute({ userId: 'u1', outcomeId: 'o1', stake: 10 });
 
-    // Assert — la cote affichée (ouverture) est figée dans le pari ; débit unique
+    // Assert
     expect(out.lockedOdds).toBe(openingOdds().value);
     expect(out.pricingProvisional).toBe(true);
     expect(bets.saved[0].lockedOdds.value).toBe(openingOdds().value);

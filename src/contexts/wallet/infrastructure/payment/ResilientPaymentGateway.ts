@@ -15,10 +15,6 @@ export interface PaymentResilienceOptions {
   baseDelayMs: number;
 }
 
-// Décorateur de résilience autour d'un PaymentGateway (le vrai Stripe). Money-critical : timeout +
-// retry (la CLÉ D'IDEMPOTENCE rend le retry sûr — pas de double-charge) + circuit breaker
-// (fail-fast quand le PSP est durablement KO, au lieu d'empiler des appels lents). Si tout échoue,
-// l'erreur remonte à la saga, qui n'a alors RIEN encaissé (pas de charge sans crédit).
 export class ResilientPaymentGateway implements PaymentGateway {
   constructor(
     private readonly inner: PaymentGateway,

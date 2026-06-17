@@ -11,14 +11,10 @@ import {
   RefundResult,
 } from './ports/PaymentGateway';
 
-// UoW de test : pas de vraie transaction, exécute le travail tel quel (les adapters in-memory
-// portent eux-mêmes leur idempotence par opKey).
 const directUow: UnitOfWork = {
   withTransaction: <T>(work: () => Promise<T>): Promise<T> => work(),
 };
 
-// PSP factice idempotent (calqué sur StubPaymentGateway, mais inline pour garder ce spec
-// d'application SANS dépendance sur la couche infrastructure — frontières hexagonales).
 class FakePayment implements PaymentGateway {
   private readonly charges = new Map<string, ChargeResult>();
   private readonly refunds = new Map<string, RefundResult>();
@@ -46,8 +42,6 @@ class FakePayment implements PaymentGateway {
   }
 }
 
-// Wallet in-memory minimal et CONTRÔLABLE : solde + journal signé, idempotence par opKey, et
-// injection d'échec sur le crédit (pour le scénario charge-sans-crédit).
 class FakeWallet implements WalletCreditPort, WalletRefundPort {
   balance: number;
   readonly ops = new Map<string, number>();
@@ -102,7 +96,7 @@ describe('DepositFunds (BET-17) — saga Stripe : charge → crédit → compens
     // Act
     const result = await saga.execute({ userId: 'p1', amount: 50, depositId: 'd1' });
 
-    // Assert — solde crédité, ledger cohérent, AUCUNE compensation
+    // Assert
     expect(result).toMatchObject({ depositId: 'd1', amount: 50, status: 'CREDITED' });
     expect(wallet.balance).toBe(150);
     expect(payment.chargeCount).toBe(1);
@@ -111,14 +105,14 @@ describe('DepositFunds (BET-17) — saga Stripe : charge → crédit → compens
   });
 
   it('shouldRefundAndLeaveBalanceUntouched_WhenWalletCreditFailsAfterCharge', async () => {
-    // Arrange — charge OK mais le crédit wallet échoue (charge sans crédit = danger money)
+    // Arrange
     const wallet = new FakeWallet(100);
     wallet.failCredit = true;
     const payment = new FakePayment();
     const notifier = new CapturingNotifier();
     const saga = make(wallet, payment, notifier);
 
-    // Act / Assert — l'utilisateur est informé et REMBOURSÉ, le solde ne bouge pas
+    // Act / Assert
     await expect(saga.execute({ userId: 'p1', amount: 50, depositId: 'd1' })).rejects.toThrow();
     expect(wallet.balance).toBe(100);
     expect(payment.chargeCount).toBe(1);
@@ -134,23 +128,23 @@ describe('DepositFunds (BET-17) — saga Stripe : charge → crédit → compens
     const payment = new FakePayment();
     const saga = make(wallet, payment, new CapturingNotifier());
 
-    // Act — rejeu du MÊME dépôt (retry réseau côté client)
+    // Act
     await saga.execute({ userId: 'p1', amount: 50, depositId: 'd1' });
     await saga.execute({ userId: 'p1', amount: 50, depositId: 'd1' });
 
-    // Assert — exactly-once : une charge, un crédit
+    // Assert
     expect(wallet.balance).toBe(150);
     expect(payment.chargeCount).toBe(1);
   });
 
   it('shouldReverseCreditAndRefund_WhenDownstreamFailsAfterCredit', async () => {
-    // Arrange — crédit commit puis étape AVAL (ex. pari) en échec
+    // Arrange
     const wallet = new FakeWallet(100);
     const payment = new FakePayment();
     const notifier = new CapturingNotifier();
     const saga = make(wallet, payment, notifier);
 
-    // Act / Assert — la saga défait le crédit ET rembourse : solde revient à l'initial
+    // Act / Assert
     await expect(
       saga.execute({
         userId: 'p1',
@@ -176,23 +170,23 @@ describe('DepositFunds (BET-17) — saga Stripe : charge → crédit → compens
       afterCredit: (): Promise<void> => Promise.reject(new Error('aval KO')),
     };
 
-    // Act — la compensation est rejouée (même depositId)
+    // Act
     await expect(saga.execute(failingDownstream)).rejects.toThrow();
     await expect(saga.execute(failingDownstream)).rejects.toThrow();
 
-    // Assert — un seul reverse, un seul refund : solde inchangé, pas de double mouvement
+    // Assert
     expect(wallet.balance).toBe(100);
     expect(payment.refundCount).toBe(1);
   });
 
   it('shouldNotCreditNorCompensate_WhenChargeFailsUpfront', async () => {
-    // Arrange — PSP en panne dès la charge (ex. circuit ouvert) : rien n'a été encaissé
+    // Arrange
     const wallet = new FakeWallet(100);
     const payment = new FakePayment(true);
     const notifier = new CapturingNotifier();
     const saga = make(wallet, payment, notifier);
 
-    // Act / Assert — pas de crédit, pas de refund (rien à compenser), erreur remontée
+    // Act / Assert
     await expect(saga.execute({ userId: 'p1', amount: 50, depositId: 'd1' })).rejects.toThrow();
     expect(wallet.balance).toBe(100);
     expect(payment.chargeCount).toBe(0);
@@ -206,7 +200,7 @@ describe('DepositFunds (BET-17) — saga Stripe : charge → crédit → compens
     const payment = new FakePayment();
     const saga = make(wallet, payment, new CapturingNotifier());
 
-    // Act / Assert — pas de charge sur un montant invalide
+    // Act / Assert
     await expect(saga.execute({ userId: 'p1', amount: 0, depositId: 'd1' })).rejects.toThrow();
     expect(payment.chargeCount).toBe(0);
   });

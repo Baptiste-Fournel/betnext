@@ -5,8 +5,6 @@ import {
 } from '../../../shared-kernel/ports/MarketCreationPort';
 import { CreateMarket } from '../application/CreateMarket';
 
-// Adapter exposant la création de marché catalog au reste du système via le port
-// shared-kernel (MarketCreationPort), sans franchir la frontière de contexte.
 export class CatalogMarketCreation implements MarketCreationPort {
   constructor(private readonly useCase: CreateMarket) {}
 

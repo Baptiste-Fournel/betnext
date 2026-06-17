@@ -16,7 +16,6 @@ const linkStore = (matchIds: string[]): MatchLinkStore => {
   };
 };
 
-// Réglage piloté par un scénario par matchId (file de réponses → simule 1er run vs rejeu).
 const settlerFrom = (scenarios: Record<string, SyncResult[]>): MatchResultSettler => {
   const cursors: Record<string, number> = {};
   return {
@@ -39,7 +38,7 @@ const settledWon = (matchId: string, settled: number): SyncResult => ({
 
 describe('SyncFeedResults (BET-32)', () => {
   it('shouldSettleFinishedMatchesAndLeaveUpcomingPending_WhenResultsAvailable', async () => {
-    // Arrange — un match terminé (gagnant), un match à venir (PENDING)
+    // Arrange
     const settler = settlerFrom({
       done: [settledWon('done', 1)],
       upcoming: [{ matchId: 'upcoming', status: 'PENDING' }],
@@ -61,7 +60,7 @@ describe('SyncFeedResults (BET-32)', () => {
   });
 
   it('shouldBeNoOpOnRerun_WhenMatchAlreadySettled', async () => {
-    // Arrange — 1er run règle 1 pari ; rejeu = exactly-once → 0 pari réglé (pas de double-crédit)
+    // Arrange
     const settler = settlerFrom({
       done: [settledWon('done', 1), settledWon('done', 0)],
     });
@@ -73,8 +72,8 @@ describe('SyncFeedResults (BET-32)', () => {
 
     // Assert
     expect(first.settledBets).toBe(1);
-    expect(second.settledBets).toBe(0); // rejeu = no-op
-    expect(second.finished).toBe(1); // toujours « terminé », mais aucun nouveau règlement
+    expect(second.settledBets).toBe(0);
+    expect(second.finished).toBe(1);
   });
 
   it('shouldIsolateFailureAndKeepSettlingOthers_WhenOneMatchThrows', async () => {
@@ -90,14 +89,14 @@ describe('SyncFeedResults (BET-32)', () => {
     // Act
     const summary = await feed.execute();
 
-    // Assert — l'échec d'un match n'empêche pas de régler les autres
+    // Assert
     expect(summary.failed).toBe(1);
     expect(summary.finished).toBe(1);
     expect(summary.settledBets).toBe(1);
   });
 
   it('shouldThrottleAndSkipExternalCalls_WhenCalledWithinMinInterval', async () => {
-    // Arrange — rate-limit : 2e appel trop tôt
+    // Arrange
     let t = 1000;
     let calls = 0;
     const settler: MatchResultSettler = {
@@ -114,11 +113,11 @@ describe('SyncFeedResults (BET-32)', () => {
     // Act
     await feed.execute();
     const callsAfterFirst = calls;
-    t = 2000; // +1s seulement
+    t = 2000;
     const throttled = await feed.execute();
 
     // Assert
     expect(throttled.throttled).toBe(true);
-    expect(calls).toBe(callsAfterFirst); // aucun appel externe supplémentaire
+    expect(calls).toBe(callsAfterFirst);
   });
 });

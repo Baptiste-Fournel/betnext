@@ -1,7 +1,5 @@
 import { EsportsResultProvider } from './EsportsResultProvider';
 
-// Réponse au format LoL Esports getEventDetails — bruitée pour prouver que l'ACL ne fait pas
-// fuiter ce format dans le domaine (on ne renvoie qu'un MatchReport neutre).
 const eventDetails = (teams: Array<{ code?: string; gameWins: number }>, count = 5): unknown => ({
   data: {
     event: {
@@ -34,7 +32,7 @@ describe('EsportsResultProvider — ACL résultats LoL Esports → domaine (BET-
   afterEach(() => jest.restoreAllMocks());
 
   it('shouldReportHomeWinner_WhenFirstTeamReachedRequiredWins', async () => {
-    // Arrange — BO5, l'équipe 0 (HOME) atteint 3 victoires
+    // Arrange
     jest
       .spyOn(global, 'fetch')
       .mockImplementation(fetchReturning(eventDetails([{ gameWins: 3 }, { gameWins: 1 }], 5)));
@@ -43,7 +41,7 @@ describe('EsportsResultProvider — ACL résultats LoL Esports → domaine (BET-
     // Act
     const report = await provider.fetchMatchReport('116634566264113564');
 
-    // Assert — côté gagnant par index (teams[0]=HOME), aligné sur l'ingestion
+    // Assert
     expect(report).toEqual({ matchId: '116634566264113564', status: 'FINISHED', winner: 'HOME' });
   });
 
@@ -63,7 +61,7 @@ describe('EsportsResultProvider — ACL résultats LoL Esports → domaine (BET-
   });
 
   it('shouldReportPending_WhenNoTeamReachedRequiredWins', async () => {
-    // Arrange — match en cours (2-1 en BO5)
+    // Arrange
     jest
       .spyOn(global, 'fetch')
       .mockImplementation(fetchReturning(eventDetails([{ gameWins: 2 }, { gameWins: 1 }], 5)));
@@ -72,7 +70,7 @@ describe('EsportsResultProvider — ACL résultats LoL Esports → domaine (BET-
     // Act
     const report = await provider.fetchMatchReport('m');
 
-    // Assert — pas terminé → PENDING (on ne règle pas)
+    // Assert
     expect(report).toEqual({ matchId: 'm', status: 'PENDING', winner: null });
   });
 
@@ -84,7 +82,7 @@ describe('EsportsResultProvider — ACL résultats LoL Esports → domaine (BET-
     // Act
     const report = await provider.fetchMatchReport('unknown');
 
-    // Assert — inconnu côté source → PENDING (jamais de règlement sur données absentes)
+    // Assert
     expect(report.status).toBe('PENDING');
   });
 
@@ -93,12 +91,12 @@ describe('EsportsResultProvider — ACL résultats LoL Esports → domaine (BET-
     jest.spyOn(global, 'fetch').mockImplementation(fetchReturning({}, { ok: false, status: 503 }));
     const provider = new EsportsResultProvider('https://esports-api.example', 'k');
 
-    // Act / Assert — l'erreur remonte (le résilient/déclencheur la rattrapent → pas de règlement)
+    // Act / Assert
     await expect(provider.fetchMatchReport('m')).rejects.toThrow(/503/);
   });
 
   it('shouldReturnPendingAndNotGuess_WhenTeamsShapeUnexpected', async () => {
-    // Arrange — une seule équipe (shape inattendue) : on refuse de deviner un gagnant
+    // Arrange
     jest
       .spyOn(global, 'fetch')
       .mockImplementation(fetchReturning(eventDetails([{ gameWins: 3 }], 5)));
@@ -107,7 +105,7 @@ describe('EsportsResultProvider — ACL résultats LoL Esports → domaine (BET-
     // Act
     const report = await provider.fetchMatchReport('m');
 
-    // Assert — money-safety : pas de règlement sur une forme imprévue
+    // Assert
     expect(report.status).toBe('PENDING');
   });
 
@@ -121,7 +119,7 @@ describe('EsportsResultProvider — ACL résultats LoL Esports → domaine (BET-
     // Act
     await provider.fetchMatchReport('match-42');
 
-    // Assert — clé en header (jamais dans l'URL), endpoint getEventDetails avec l'id
+    // Assert
     const [url, options] = spy.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/persisted/gw/getEventDetails');
     expect(url).toContain('id=match-42');

@@ -9,7 +9,7 @@ const store = (links: MatchLink[]): MatchLinkStore => ({
 
 describe('ListUpcomingMatches (BET-30)', () => {
   it('shouldExposeMarketLeagueAndKickoff_WhenLinksArePresent', async () => {
-    // Arrange — un match à venir ingéré porte ligue + kickoff
+    // Arrange
     const upcoming: MatchLink = {
       matchId: '115570934355614497',
       marketId: 'mkt-msi',

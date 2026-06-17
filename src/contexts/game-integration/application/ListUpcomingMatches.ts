@@ -7,8 +7,6 @@ export interface UpcomingMatch {
   startTime: string | null;
 }
 
-// Liste les matchs pro ingérés (BET-30) que le front joueur croise avec /markets pour afficher
-// le badge ligue + le kickoff. Lecture seule, publique.
 export class ListUpcomingMatches {
   constructor(private readonly links: MatchLinkStore) {}
 

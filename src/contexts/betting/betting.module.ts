@@ -105,9 +105,6 @@ export const BETTING_TOKENS = {
       inject: [PlaceBet, IDEMPOTENCY_STORE, UNIT_OF_WORK],
     },
     {
-      // Couture d'extensibilité (ADR-009) : on enregistre ICI les stratégies de règlement.
-      // Ajouter un type de pari = +1 stratégie (fichier) + cette ligne. Le moteur (SettleMarket),
-      // la factory et WinningOutcomeStrategy restent INCHANGÉS (Open/Closed). Cf. BET-25.
       provide: SettlementStrategyFactory,
       useFactory: (): SettlementStrategyFactory =>
         new SettlementStrategyFactory([new WinningOutcomeStrategy(), new ExactScoreStrategy()]),
@@ -123,8 +120,6 @@ export const BETTING_TOKENS = {
       inject: [BET_REPOSITORY, WALLET_CREDIT_PORT, SettlementStrategyFactory, UNIT_OF_WORK],
     },
     {
-      // Couture inter-contextes : permet à un déclencheur de règlement (ex. futur driver
-      // « résultats esports auto ») de régler un marché via le bus de commandes, exactly-once.
       provide: MARKET_SETTLEMENT_PORT,
       useFactory: (commandBus: CommandBus): MarketSettlementPort =>
         new CommandBusMarketSettlement(commandBus),

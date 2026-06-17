@@ -10,10 +10,6 @@ export interface GameProviderResilienceOptions {
   baseDelayMs: number;
 }
 
-// Durcit les appels de RÉSULTATS à la source externe (instable) : timeout + retry + circuit
-// breaker. Si tout échoue, l'erreur remonte au déclencheur (`SyncFeedResults`) qui la rattrape
-// par match → le match reste à régler plus tard. JAMAIS de bascule sur des résultats fictifs
-// (money-safety : on ne règle pas sur de fausses données).
 export class ResilientGameProvider implements GameProvider {
   constructor(
     private readonly inner: GameProvider,

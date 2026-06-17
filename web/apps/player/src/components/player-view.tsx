@@ -84,9 +84,7 @@ export function PlayerView(): React.JSX.Element {
       try {
         const { data: upcoming } = await api.GET('/game-integration/upcoming');
         if (upcoming) setUpcomingByMarket(new Map(upcoming.map((u) => [u.marketId, u])));
-      } catch {
-        // listing des matchs à venir non bloquant : badge ligue/kickoff purement informatif
-      }
+      } catch {}
       const entries = await Promise.all(
         data
           .flatMap((m) => m.outcomes)

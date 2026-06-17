@@ -1,8 +1,6 @@
 import { MatchLinkStore } from './ports/MatchLinkStore';
 import { SyncResult } from './SyncMatchResult';
 
-// Déclencheur réutilisant le moteur de règlement-par-résultat (`SyncMatchResult`) pour chaque
-// match ingéré. Découplé du concret pour les tests.
 export interface MatchResultSettler {
   execute(matchId: string): Promise<SyncResult>;
 }
@@ -36,10 +34,6 @@ const emptySummary = (): SyncResultsSummary => ({
   voided: 0,
 });
 
-// Pour chaque lien de match ingéré, va chercher le résultat (via `SyncMatchResult` → ACL résultats)
-// et, si le match est terminé, règle marché + paris **exactly-once** (rejeu = no-op grâce au garde
-// de settlement). Money-safety : un échec par match est isolé (try/catch) et n'interrompt ni les
-// autres ni l'app. Rate-limit léger (intervalle minimal) pour ne pas marteler la source externe.
 export class SyncFeedResults {
   private lastRunAt = Number.NEGATIVE_INFINITY;
 

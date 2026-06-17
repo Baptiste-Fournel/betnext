@@ -35,11 +35,9 @@ import { EsportsFeedScheduler } from './infrastructure/scheduler/EsportsFeedSche
 const esportsConfigured = (): boolean =>
   Boolean(process.env.ESPORTS_API_BASE_URL && process.env.ESPORTS_API_KEY);
 
-// Rafraîchissement auto (BET-33), OFF par défaut → jamais armé en test/CI ni sans opt-in explicite.
 const schedulerEnabled = (): boolean =>
   ['1', 'true', 'yes', 'on'].includes((process.env.ESPORTS_SCHEDULER_ENABLED ?? '').toLowerCase());
 
-// Intervalle « quelques minutes » par défaut (5 min). Valeur invalide/absente → défaut sûr.
 const schedulerIntervalMs = (): number => {
   const raw = Number(process.env.ESPORTS_SCHEDULER_INTERVAL_MS);
   return Number.isFinite(raw) && raw > 0 ? raw : 300_000;
@@ -61,9 +59,6 @@ const schedulerIntervalMs = (): number => {
       inject: [MATCH_LINK_STORE],
     },
     {
-      // Sélection live/fixtures par config (ENV). Base URL + clé JAMAIS en dur. Sans config →
-      // fixtures (CI/démo hors-ligne). Avec config → source live durcie (timeout/retry) +
-      // bascule automatique sur fixtures si injoignable (jamais d'app cassée).
       provide: ESPORTS_SCHEDULE_PROVIDER,
       useFactory: (): EsportsScheduleProvider => {
         const fixtures = new FixtureEsportsScheduleProvider();
@@ -89,10 +84,6 @@ const schedulerIntervalMs = (): number => {
       ): IngestUpcomingMatches => new IngestUpcomingMatches(schedule, ingestMatch, store),
       inject: [ESPORTS_SCHEDULE_PROVIDER, IngestMatchMarket, MATCH_LINK_STORE],
     },
-    // --- Règlement-par-résultat auto (BET-32) ---
-    // ACL résultats : source live durcie (timeout/retry/circuit breaker) si configurée, sinon
-    // fixtures déterministes (tests/démo). PAS de bascule live→fixtures : on ne règle JAMAIS sur
-    // de fausses données (money-safety) — source down → PENDING, on réessaie plus tard.
     {
       provide: GAME_PROVIDER,
       useFactory: (): GameProvider => {
@@ -128,10 +119,6 @@ const schedulerIntervalMs = (): number => {
       },
       inject: [MATCH_LINK_STORE, SyncMatchResult],
     },
-    // --- Rafraîchissement auto du feed (BET-33) ---
-    // Déclencheur temporel : ré-ingère les matchs à venir + synchronise les résultats sans clic.
-    // Ne fait QUE rappeler les use cases ci-dessus (idempotent + exactly-once) — zéro logique
-    // money. Gate ENV `ESPORTS_SCHEDULER_ENABLED` (OFF par défaut → inerte en test/CI/démo).
     {
       provide: EsportsFeedScheduler,
       useFactory: (ingest: IngestUpcomingMatches, results: SyncFeedResults): EsportsFeedScheduler =>

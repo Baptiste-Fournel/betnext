@@ -16,10 +16,6 @@ export interface IngestSummary {
   marketIds: string[];
 }
 
-// Transforme les matchs pro à venir (port ACL) en marchés bettables, via la brique
-// IngestMatchMarket (→ MarketCreationPort + lien match↔marché). Les cotes restent calculées
-// par NOTRE pricing ; aucune cote externe n'entre ici. Idempotent : un externalId déjà lié est
-// ignoré → un re-pull ne duplique pas les marchés.
 export class IngestUpcomingMatches {
   constructor(
     private readonly schedule: EsportsScheduleProvider,
@@ -32,8 +28,6 @@ export class IngestUpcomingMatches {
     try {
       schedule = await this.schedule.fetchUpcoming();
     } catch {
-      // Feed totalement injoignable : on dégrade sans jamais casser l'app. Aucun marché créé,
-      // l'existant reste intact. Le mode dégradé est signalé via `source: 'fixtures'`.
       return { source: 'fixtures', total: 0, ingested: 0, skipped: 0, failed: 0, marketIds: [] };
     }
 
@@ -56,8 +50,6 @@ export class IngestUpcomingMatches {
         summary.ingested += 1;
         summary.marketIds.push(created.marketId);
       } catch {
-        // Un match mal formé (id vide, libellés manquants…) ne doit jamais interrompre
-        // l'ingestion des autres ni laisser l'app dans un état cassé.
         summary.failed += 1;
       }
     }
@@ -72,8 +64,6 @@ export class IngestUpcomingMatches {
       matchId: match.externalId,
       league: match.league,
       startTime: match.startTime,
-      // LoL = pas de match nul : 2 issues, HOME = équipe A, AWAY = équipe B. Le mapping
-      // côté→issue est posé sur le lien pour le règlement-par-résultat (futur driver auto).
       outcomes: [
         { label: `Victoire ${match.teamA}`, side: 'HOME' },
         { label: `Victoire ${match.teamB}`, side: 'AWAY' },
