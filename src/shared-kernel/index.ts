@@ -1,4 +1,5 @@
 export { Odds } from './domain/Odds';
+export { openingOdds, OPENING_ODDS_VALUE } from './domain/OpeningOdds';
 export { DomainError } from './domain/DomainError';
 export { IdempotencyConflictError } from './domain/IdempotencyConflictError';
 export { IdempotencyInProgressError } from './domain/IdempotencyInProgressError';

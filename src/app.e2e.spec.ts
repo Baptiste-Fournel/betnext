@@ -116,9 +116,11 @@ describe('BetNext API (e2e, auth BET-20)', () => {
       .expect(409);
   });
 
-  it('shouldReturn404OnColdOddsAndReadOwnBet_WhenReadingScopedReadModel', async () => {
-    // When / Then
-    await request(server()).get('/odds/cold-outcome').expect(404);
+  it('shouldServeOpeningOddsOnColdAndReadOwnBet_WhenReadingScopedReadModel', async () => {
+    // When / Then — read-model froid : on sert la ligne d'ouverture (plus de 404)
+    const cold = await request(server()).get('/odds/cold-outcome').expect(200);
+    expect(cold.body).toMatchObject({ outcomeId: 'cold-outcome', opening: true });
+    expect(typeof cold.body.odds).toBe('number');
     const post = await request(server())
       .post('/bets')
       .set(...auth(tokenA))

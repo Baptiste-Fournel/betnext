@@ -24,6 +24,7 @@ import { CapPanel } from '@/components/cap-panel';
 type Market = components['schemas']['MarketDto'];
 type OddsLiveEvent = components['schemas']['OddsLiveEventDto'];
 type LiveState = 'connecting' | 'live' | 'reconnecting';
+type OddsState = { value: number; opening: boolean };
 
 function parseOddsEvent(raw: string): OddsLiveEvent | null {
   try {
@@ -50,7 +51,7 @@ export function PlayerView(): React.JSX.Element {
   const userId = user?.userId ?? '';
   const [markets, setMarkets] = useState<Market[] | null>(null);
   const [marketsError, setMarketsError] = useState(false);
-  const [odds, setOdds] = useState<Record<string, number | null>>({});
+  const [odds, setOdds] = useState<Record<string, OddsState | null>>({});
   const [live, setLive] = useState<LiveState>('connecting');
   const [selected, setSelected] = useState<Selection | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -73,7 +74,10 @@ export function PlayerView(): React.JSX.Element {
               const { data: current } = await api.GET('/odds/{outcomeId}', {
                 params: { path: { outcomeId: o.id } },
               });
-              return [o.id, current ? current.odds : null] as const;
+              return [
+                o.id,
+                current ? { value: current.odds, opening: current.opening } : null,
+              ] as const;
             } catch {
               return [o.id, null] as const;
             }
@@ -97,7 +101,11 @@ export function PlayerView(): React.JSX.Element {
     };
     source.onmessage = (event) => {
       const update = parseOddsEvent(event.data);
-      if (update) setOdds((prev) => ({ ...prev, [update.outcomeId]: update.odds }));
+      if (update)
+        setOdds((prev) => ({
+          ...prev,
+          [update.outcomeId]: { value: update.odds, opening: false },
+        }));
     };
     return () => source.close();
   }, []);
@@ -173,7 +181,8 @@ export function PlayerView(): React.JSX.Element {
                       <OutcomeOddsButton
                         key={outcome.id}
                         outcome={outcome}
-                        odds={odds[outcome.id]}
+                        odds={odds[outcome.id]?.value}
+                        opening={odds[outcome.id]?.opening ?? false}
                         selected={selected?.outcome.id === outcome.id}
                         onSelect={() => setSelected({ market, outcome })}
                       />
@@ -189,7 +198,7 @@ export function PlayerView(): React.JSX.Element {
             key={selected?.outcome.id ?? 'empty'}
             userId={userId}
             selection={selected}
-            liveOdds={selected ? odds[selected.outcome.id] ?? null : null}
+            liveOdds={selected ? odds[selected.outcome.id]?.value ?? null : null}
             onPlaced={() => setRefreshKey((k) => k + 1)}
             onClear={() => setSelected(null)}
           />

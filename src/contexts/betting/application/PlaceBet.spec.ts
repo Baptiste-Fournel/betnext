@@ -1,6 +1,7 @@
 import { PlaceBet } from './PlaceBet';
 import { Bet } from '../domain/Bet';
 import { Odds } from '../../../shared-kernel/domain/Odds';
+import { openingOdds } from '../../../shared-kernel/domain/OpeningOdds';
 import { WalletDebitPort } from '../../../shared-kernel/ports/WalletDebitPort';
 import { BetRepository, StoredBetEvent } from './ports/BetRepository';
 import { CurrentOdds, OddsProvider } from './ports/OddsProvider';
@@ -70,5 +71,24 @@ describe('PlaceBet (use case hexagonal)', () => {
     expect(out.potentialGain).toBe(50);
     expect(bets.saved).toHaveLength(1);
     expect(wallet.debits).toEqual([{ userId: 'u1', amount: 20, key: out.betId }]);
+  });
+
+  it('shouldFreezeOpeningOddsIntoLockedOdds_WhenMarketHasNoVolume', async () => {
+    // Arrange — provider renvoie la ligne d'ouverture, marquée provisoire (read-model froid)
+    const bets = new InMemoryBets();
+    const wallet = new SpyWallet();
+    const provider: OddsProvider = {
+      currentOdds: async (): Promise<CurrentOdds> => ({ value: openingOdds(), provisional: true }),
+    };
+    const useCase = new PlaceBet(bets, provider, wallet, new SeqIds(), noopUow);
+
+    // Act
+    const out = await useCase.execute({ userId: 'u1', outcomeId: 'o1', stake: 10 });
+
+    // Assert — la cote affichée (ouverture) est figée dans le pari ; débit unique
+    expect(out.lockedOdds).toBe(openingOdds().value);
+    expect(out.pricingProvisional).toBe(true);
+    expect(bets.saved[0].lockedOdds.value).toBe(openingOdds().value);
+    expect(wallet.debits).toHaveLength(1);
   });
 });

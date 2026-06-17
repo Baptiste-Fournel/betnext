@@ -8,11 +8,13 @@ type Outcome = components['schemas']['OutcomeDto'];
 export function OutcomeOddsButton({
   outcome,
   odds,
+  opening,
   selected,
   onSelect,
 }: {
   outcome: Outcome;
   odds: number | null | undefined;
+  opening?: boolean;
   selected: boolean;
   onSelect: () => void;
 }): React.JSX.Element {
@@ -32,9 +34,16 @@ export function OutcomeOddsButton({
     >
       <span className="truncate text-xs text-muted-foreground">{outcome.label}</span>
       {hasOdds ? (
-        <span className="text-lg font-bold tabular-nums text-primary">{odds.toFixed(2)}</span>
+        <span className="flex items-baseline gap-1.5">
+          <span className="text-lg font-bold tabular-nums text-primary">{odds.toFixed(2)}</span>
+          {opening && (
+            <span className="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
+              ouverture
+            </span>
+          )}
+        </span>
       ) : (
-        <span className="text-xs font-medium text-warning">à l&apos;ouverture</span>
+        <span className="text-xs font-medium text-warning">indisponible</span>
       )}
     </button>
   );

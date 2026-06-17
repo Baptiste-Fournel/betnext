@@ -277,6 +277,11 @@ export interface components {
             outcomeId: string;
             /** @example 2 */
             odds: number;
+            /**
+             * @description true = cote d'ouverture (aucun volume encore), false = cote pilotée par le volume
+             * @example true
+             */
+            opening: boolean;
         };
         OddsLiveEventDto: {
             /** @example lol-finale-a */
@@ -606,7 +611,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Cote courante (read-model) */
+            /** @description Cote courante (read-model) ou cote d'ouverture si aucun volume */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -614,13 +619,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CurrentOddsDto"];
                 };
-            };
-            /** @description Read-model froid : aucune cote encore projetée */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };

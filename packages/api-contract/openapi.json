@@ -38,7 +38,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Cote courante (read-model)",
+            "description": "Cote courante (read-model) ou cote d'ouverture si aucun volume",
             "content": {
               "application/json": {
                 "schema": {
@@ -46,9 +46,6 @@
                 }
               }
             }
-          },
-          "404": {
-            "description": "Read-model froid : aucune cote encore projetée"
           }
         },
         "tags": [
@@ -737,11 +734,17 @@
           "odds": {
             "type": "number",
             "example": 2
+          },
+          "opening": {
+            "type": "boolean",
+            "example": true,
+            "description": "true = cote d'ouverture (aucun volume encore), false = cote pilotée par le volume"
           }
         },
         "required": [
           "outcomeId",
-          "odds"
+          "odds",
+          "opening"
         ]
       },
       "OddsLiveEventDto": {
