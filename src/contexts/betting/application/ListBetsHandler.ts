@@ -8,8 +8,8 @@ import { BET_REPOSITORY, BetRepository } from './ports/BetRepository';
 export class ListBetsHandler implements IQueryHandler<ListBetsQuery, BetView[]> {
   constructor(@Inject(BET_REPOSITORY) private readonly bets: BetRepository) {}
 
-  async execute(): Promise<BetView[]> {
-    const bets = await this.bets.list();
+  async execute(query: ListBetsQuery): Promise<BetView[]> {
+    const bets = await this.bets.listByUser(query.userId);
     return bets.map((bet) => ({
       betId: bet.id,
       userId: bet.userId,

@@ -9,8 +9,10 @@ import {
   NotFoundException,
   Param,
   Post,
+  UseGuards,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiBody,
   ApiConflictResponse,
   ApiCreatedResponse,
@@ -21,6 +23,7 @@ import {
   ApiProperty,
   ApiPropertyOptional,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { PlaceBetCommand } from '../../application/PlaceBetCommand';
@@ -29,10 +32,11 @@ import { ListBetsQuery } from '../../application/ListBetsQuery';
 import { GetBetHistoryQuery } from '../../application/GetBetHistoryQuery';
 import { BetView } from '../../application/GetBetHandler';
 import { BetEventView } from '../../application/GetBetHistoryHandler';
+import { JwtAuthGuard } from '../../../../shared/auth/jwt-auth.guard';
+import { CurrentUser } from '../../../../shared/auth/current-user.decorator';
+import { AuthUser } from '../../../../shared/auth/auth-user';
 
 class PlaceBetRequest {
-  @ApiProperty({ example: 'demo-player' })
-  userId!: string;
   @ApiProperty({ example: 'lol-finale-a' })
   outcomeId!: string;
   @ApiProperty({ example: 20, minimum: 0, description: 'Mise (strictement positive)' })
@@ -79,17 +83,19 @@ class BetEventDto {
 }
 
 interface PlaceBetBody {
-  userId?: unknown;
   outcomeId?: unknown;
   stake?: unknown;
 }
 
 /**
- * Adapter HTTP. ÉCRITURE : POST /bets (CommandBus, `Idempotency-Key` requis). LECTURE (QueryBus) :
- * GET /bets (liste — NON scopée utilisateur tant qu'Identity n'existe pas, dette tracée),
- * GET /bets/:id (read-your-writes), GET /bets/:id/events (timeline / Event Sourcing visible).
+ * Adapter HTTP des paris — AUTHENTIFIÉ (BET-20). Le `userId` vient TOUJOURS du token (jamais du
+ * corps), donc aucune usurpation. LECTURE scopée anti-IDOR : un joueur ne voit que SES paris ; un id
+ * d'autrui (ou inconnu) → 404 indistinct. ÉCRITURE : POST /bets (CommandBus, `Idempotency-Key`).
  */
 @ApiTags('bets')
+@ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: 'Token Bearer requis/invalide' })
+@UseGuards(JwtAuthGuard)
 @Controller('bets')
 export class BettingController {
   constructor(
@@ -108,36 +114,40 @@ export class BettingController {
   @ApiCreatedResponse({ type: PlaceBetResponse, description: 'Pari posé (cote figée)' })
   @ApiConflictResponse({ description: 'Même Idempotency-Key réutilisée avec un corps différent' })
   place(
+    @CurrentUser() user: AuthUser,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Body() body: PlaceBetBody,
   ): Promise<PlaceBetResponse> {
     if (!idempotencyKey || idempotencyKey.trim() === '') {
       throw new BadRequestException("Header 'Idempotency-Key' requis");
     }
-    const { userId, outcomeId, stake } = this.validate(body);
+    const { outcomeId, stake } = this.validate(body);
+    // userId = identité authentifiée (token), JAMAIS un champ client → pas d'usurpation.
     const requestHash = createHash('sha256')
-      .update(JSON.stringify({ userId, outcomeId, stake }))
+      .update(JSON.stringify({ userId: user.userId, outcomeId, stake }))
       .digest('hex');
     return this.commandBus.execute<PlaceBetCommand, PlaceBetResponse>(
-      new PlaceBetCommand(userId, outcomeId, stake, idempotencyKey.trim(), requestHash),
+      new PlaceBetCommand(user.userId, outcomeId, stake, idempotencyKey.trim(), requestHash),
     );
   }
 
   @Get()
   @ApiOkResponse({
     type: [BetViewDto],
-    description: 'Liste des paris (non scopée — voir dette Identity)',
+    description: "Paris de l'utilisateur authentifié uniquement",
   })
-  list(): Promise<BetViewDto[]> {
-    return this.queryBus.execute<ListBetsQuery, BetView[]>(new ListBetsQuery());
+  list(@CurrentUser() user: AuthUser): Promise<BetViewDto[]> {
+    return this.queryBus.execute<ListBetsQuery, BetView[]>(new ListBetsQuery(user.userId));
   }
 
   @Get(':id')
   @ApiParam({ name: 'id' })
   @ApiOkResponse({ type: BetViewDto })
-  @ApiNotFoundResponse({ description: 'Pari introuvable' })
-  async get(@Param('id') id: string): Promise<BetViewDto> {
-    const bet = await this.queryBus.execute<GetBetQuery, BetView | null>(new GetBetQuery(id));
+  @ApiNotFoundResponse({ description: 'Pari introuvable (ou non possédé — anti-IDOR)' })
+  async get(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<BetViewDto> {
+    const bet = await this.queryBus.execute<GetBetQuery, BetView | null>(
+      new GetBetQuery(id, user.userId),
+    );
     if (!bet) {
       throw new NotFoundException(`Pari ${id} introuvable`);
     }
@@ -147,21 +157,26 @@ export class BettingController {
   @Get(':id/events')
   @ApiParam({ name: 'id' })
   @ApiOkResponse({ type: [BetEventDto], description: 'Timeline du pari (journal append-only)' })
-  events(@Param('id') id: string): Promise<BetEventDto[]> {
-    return this.queryBus.execute<GetBetHistoryQuery, BetEventView[]>(new GetBetHistoryQuery(id));
+  @ApiNotFoundResponse({ description: 'Pari introuvable (ou non possédé — anti-IDOR)' })
+  async events(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<BetEventDto[]> {
+    const events = await this.queryBus.execute<GetBetHistoryQuery, BetEventView[] | null>(
+      new GetBetHistoryQuery(id, user.userId),
+    );
+    if (events === null) {
+      throw new NotFoundException(`Pari ${id} introuvable`);
+    }
+    return events;
   }
 
-  private validate(body: PlaceBetBody): { userId: string; outcomeId: string; stake: number } {
-    const userId = typeof body.userId === 'string' ? body.userId.trim() : '';
+  private validate(body: PlaceBetBody): { outcomeId: string; stake: number } {
     const outcomeId = typeof body.outcomeId === 'string' ? body.outcomeId.trim() : '';
     const stake = typeof body.stake === 'number' ? body.stake : NaN;
 
     const errors: string[] = [];
-    if (!userId) errors.push('userId (string non vide) requis');
     if (!outcomeId) errors.push('outcomeId (string non vide) requis');
     if (!Number.isFinite(stake)) errors.push('stake (nombre) requis');
     if (errors.length > 0) throw new BadRequestException(errors);
 
-    return { userId, outcomeId, stake };
+    return { outcomeId, stake };
   }
 }

@@ -112,10 +112,18 @@
               }
             }
           },
+          "401": {
+            "description": "Token Bearer requis/invalide"
+          },
           "409": {
             "description": "Même Idempotency-Key réutilisée avec un corps différent"
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "tags": [
           "bets"
         ]
@@ -125,7 +133,7 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "Liste des paris (non scopée — voir dette Identity)",
+            "description": "Paris de l'utilisateur authentifié uniquement",
             "content": {
               "application/json": {
                 "schema": {
@@ -136,8 +144,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Token Bearer requis/invalide"
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "tags": [
           "bets"
         ]
@@ -167,10 +183,18 @@
               }
             }
           },
+          "401": {
+            "description": "Token Bearer requis/invalide"
+          },
           "404": {
-            "description": "Pari introuvable"
+            "description": "Pari introuvable (ou non possédé — anti-IDOR)"
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "tags": [
           "bets"
         ]
@@ -202,8 +226,19 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Token Bearer requis/invalide"
+          },
+          "404": {
+            "description": "Pari introuvable (ou non possédé — anti-IDOR)"
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "tags": [
           "bets"
         ]
@@ -225,7 +260,7 @@
         },
         "responses": {
           "200": {
-            "description": "Règlement effectué (comptes par statut)",
+            "description": "Règlement effectué (comptes par statut) — MANAGER",
             "content": {
               "application/json": {
                 "schema": {
@@ -236,8 +271,19 @@
           },
           "400": {
             "description": "outcomes vide, ou winningOutcomeId manquant sans voided"
+          },
+          "401": {
+            "description": "Token Bearer requis/invalide"
+          },
+          "403": {
+            "description": "Réservé au rôle MANAGER"
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "tags": [
           "markets"
         ]
@@ -249,7 +295,7 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "Rapport de réconciliation",
+            "description": "Rapport de réconciliation (MANAGER)",
             "content": {
               "application/json": {
                 "schema": {
@@ -257,8 +303,19 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Token Bearer requis/invalide"
+          },
+          "403": {
+            "description": "Réservé au rôle MANAGER"
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "tags": [
           "reconciliation"
         ]
@@ -292,10 +349,21 @@
           "400": {
             "description": "Corps invalide (userId/openingBalance)"
           },
+          "401": {
+            "description": "Token Bearer requis/invalide"
+          },
+          "403": {
+            "description": "Réservé au rôle MANAGER"
+          },
           "422": {
             "description": "Solde d'ouverture invalide (doit être >= 0)"
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "tags": [
           "wallet"
         ]
@@ -307,7 +375,7 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "Marchés ouverts (modèle N-issues)",
+            "description": "Marchés ouverts (modèle N-issues) — PUBLIC",
             "content": {
               "application/json": {
                 "schema": {
@@ -339,7 +407,7 @@
         },
         "responses": {
           "201": {
-            "description": "Marché créé",
+            "description": "Marché créé (MANAGER)",
             "content": {
               "application/json": {
                 "schema": {
@@ -351,10 +419,21 @@
           "400": {
             "description": "Corps invalide (name/game/outcomes)"
           },
+          "401": {
+            "description": "Token Bearer requis/invalide"
+          },
+          "403": {
+            "description": "Réservé au rôle MANAGER"
+          },
           "422": {
             "description": "Marché invalide (≥ 2 issues requises)"
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "tags": [
           "catalog"
         ]
@@ -363,17 +442,7 @@
     "/responsible-gaming/daily-cap": {
       "get": {
         "operationId": "ComplianceController_get",
-        "parameters": [
-          {
-            "name": "userId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "example": "demo-player",
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": "",
@@ -385,10 +454,15 @@
               }
             }
           },
-          "400": {
-            "description": "query userId manquant"
+          "401": {
+            "description": "Token Bearer requis/invalide"
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "tags": [
           "responsible-gaming"
         ]
@@ -418,14 +492,119 @@
             }
           },
           "400": {
-            "description": "Corps invalide (userId/cap)"
+            "description": "Corps invalide (cap)"
+          },
+          "401": {
+            "description": "Token Bearer requis/invalide"
           },
           "422": {
             "description": "Plafond invalide (doit être > 0)"
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "tags": [
           "responsible-gaming"
+        ]
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "operationId": "AuthController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide (username/password/role)"
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Identifiants invalides"
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "AuthController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token Bearer requis/invalide"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "auth"
         ]
       }
     }
@@ -499,10 +678,6 @@
       "PlaceBetRequest": {
         "type": "object",
         "properties": {
-          "userId": {
-            "type": "string",
-            "example": "demo-player"
-          },
           "outcomeId": {
             "type": "string",
             "example": "lol-finale-a"
@@ -515,7 +690,6 @@
           }
         },
         "required": [
-          "userId",
           "outcomeId",
           "stake"
         ]
@@ -892,10 +1066,6 @@
       "SetDailyCapRequest": {
         "type": "object",
         "properties": {
-          "userId": {
-            "type": "string",
-            "example": "demo-player"
-          },
           "cap": {
             "type": "number",
             "example": 50,
@@ -904,8 +1074,108 @@
           }
         },
         "required": [
-          "userId",
           "cap"
+        ]
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "demo-player"
+          },
+          "password": {
+            "type": "string",
+            "example": "changeme123",
+            "minLength": 8
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "RegisterResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "a1b2c3"
+          },
+          "username": {
+            "type": "string",
+            "example": "demo-player"
+          },
+          "role": {
+            "type": "string",
+            "example": "PLAYER"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "role"
+        ]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "demo-player"
+          },
+          "password": {
+            "type": "string",
+            "example": "changeme123"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "LoginResultDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "example": "a1b2c3"
+          },
+          "role": {
+            "type": "string",
+            "example": "PLAYER"
+          },
+          "token": {
+            "type": "string",
+            "description": "Token Bearer à envoyer dans Authorization"
+          },
+          "expiresInSec": {
+            "type": "number",
+            "example": 3600
+          }
+        },
+        "required": [
+          "userId",
+          "role",
+          "token",
+          "expiresInSec"
+        ]
+      },
+      "MeDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "example": "a1b2c3"
+          },
+          "role": {
+            "type": "string",
+            "example": "PLAYER"
+          }
+        },
+        "required": [
+          "userId",
+          "role"
         ]
       }
     }

@@ -1,13 +1,19 @@
-import { BadRequestException, Body, Controller, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
+  ApiBearerAuth,
   ApiBody,
+  ApiForbiddenResponse,
   ApiOkResponse,
   ApiProperty,
   ApiTags,
+  ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { OpenWallet } from '../../application/OpenWallet';
+import { JwtAuthGuard } from '../../../../shared/auth/jwt-auth.guard';
+import { RolesGuard } from '../../../../shared/auth/roles.guard';
+import { Roles } from '../../../../shared/auth/roles.decorator';
 
 /** Corps d'ouverture/alimentation d'un wallet (écrit l'entrée d'ouverture du ledger). */
 class OpenWalletRequest {
@@ -30,19 +36,25 @@ interface OpenWalletBody {
 }
 
 /**
- * Ouverture/alimentation d'un wallet (POC, sans auth — dette tracée comme partout). Écriture NORMALE :
- * validation simple du corps. Le solde et l'entrée d'ouverture du ledger sont écrits atomiquement par
- * l'adapter, et l'opération est idempotente (ré-ouverture → opened=false).
+ * Ouverture/alimentation d'un wallet — réservée au rôle **MANAGER** (BET-20) : crée/alimente de la
+ * monnaie, c'est une action d'administration sur le wallet d'un utilisateur cible (le `userId` du
+ * corps désigne ce compte — privilège manager assumé, pas un IDOR). Idempotente (ré-ouverture → false).
  */
 @ApiTags('wallet')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('MANAGER')
 @Controller('wallet')
 export class WalletController {
   constructor(private readonly openWallet: OpenWallet) {}
 
   @Post('open')
+  @HttpCode(200)
   @ApiBody({ type: OpenWalletRequest })
   @ApiOkResponse({ type: OpenWalletResultDto })
   @ApiBadRequestResponse({ description: 'Corps invalide (userId/openingBalance)' })
+  @ApiUnauthorizedResponse({ description: 'Token Bearer requis/invalide' })
+  @ApiForbiddenResponse({ description: 'Réservé au rôle MANAGER' })
   @ApiUnprocessableEntityResponse({ description: "Solde d'ouverture invalide (doit être >= 0)" })
   async open(@Body() body: OpenWalletBody): Promise<OpenWalletResultDto> {
     const userId = typeof body.userId === 'string' ? body.userId.trim() : '';

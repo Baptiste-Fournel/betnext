@@ -24,6 +24,10 @@ class StubBets implements BetRepository {
     return [];
   }
 
+  async listByUser(): Promise<Bet[]> {
+    return [];
+  }
+
   async findPendingByOutcomes(outcomeIds: string[]): Promise<Bet[]> {
     const wanted = new Set(outcomeIds);
     return [...this.store.values()].filter(

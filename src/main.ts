@@ -19,6 +19,13 @@ async function bootstrap(): Promise<void> {
     );
     process.exit(1);
   }
+  if (!process.env.AUTH_SECRET) {
+    logger.error(
+      'AUTH_SECRET manquant : requis pour signer/vérifier les tokens (BET-20). ' +
+        'Définissez un secret aléatoire dans `.env` (voir `.env.example`). Aucun secret par défaut en prod.',
+    );
+    process.exit(1);
+  }
 
   const app = await NestFactory.create(AppModule);
   app.enableCors(); // le front (Next.js) appelle l'API cross-origin

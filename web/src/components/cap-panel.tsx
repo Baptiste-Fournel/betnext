@@ -10,11 +10,11 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 
 /**
- * Panneau jeu responsable : LIT (GET) et DÉFINIT (PUT) le plafond quotidien via l'API. Aucune règle
- * métier côté front (validation « > 0 » et application du plafond dans le back). États : chargement,
- * erreur (+ réessayer), erreur d'enregistrement (message de l'API).
+ * Panneau jeu responsable : LIT (GET) et DÉFINIT (PUT) le plafond quotidien du JOUEUR CONNECTÉ. Le
+ * `userId` n'est plus envoyé (BET-20) : le back l'extrait du token → un joueur n'agit que sur SON
+ * plafond. Client mince : aucune règle métier (validation « > 0 » et application côté back).
  */
-export function CapPanel({ userId }: { userId: string }): React.JSX.Element {
+export function CapPanel(): React.JSX.Element {
   const [cap, setCap] = useState<number | null | undefined>(undefined); // undefined = chargement
   const [loadError, setLoadError] = useState(false);
   const [draft, setDraft] = useState('');
@@ -25,9 +25,7 @@ export function CapPanel({ userId }: { userId: string }): React.JSX.Element {
     setLoadError(false);
     setCap(undefined);
     try {
-      const { data } = await api.GET('/responsible-gaming/daily-cap', {
-        params: { query: { userId } },
-      });
+      const { data } = await api.GET('/responsible-gaming/daily-cap');
       if (!data) {
         setLoadError(true);
         return;
@@ -36,7 +34,7 @@ export function CapPanel({ userId }: { userId: string }): React.JSX.Element {
     } catch {
       setLoadError(true);
     }
-  }, [userId]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -47,7 +45,7 @@ export function CapPanel({ userId }: { userId: string }): React.JSX.Element {
     setSaveError(null);
     try {
       const { error, response } = await api.PUT('/responsible-gaming/daily-cap', {
-        body: { userId, cap: Number(draft) },
+        body: { cap: Number(draft) },
       });
       if (error) {
         setSaveError(apiMessage(error, response?.status));

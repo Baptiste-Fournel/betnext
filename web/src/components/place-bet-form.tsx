@@ -66,7 +66,9 @@ export function PlaceBetForm({
     try {
       const { data, error, response } = await api.POST('/bets', {
         params: { header: { 'Idempotency-Key': key } },
-        body: { userId, outcomeId: outcome.id, stake: amount },
+        // userId n'est PLUS envoyé : le back le prend du token (BET-20). `userId` (prop) ne sert
+        // plus qu'à la signature d'idempotence locale (même tentative = même clé).
+        body: { outcomeId: outcome.id, stake: amount },
       });
       if (error || !data) {
         const status = response?.status;

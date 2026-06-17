@@ -9,6 +9,8 @@ import { PricingModule } from './contexts/pricing/pricing.module';
 import { WalletModule } from './contexts/wallet/wallet.module';
 import { CatalogModule } from './contexts/catalog/catalog.module';
 import { ComplianceModule } from './contexts/compliance/compliance.module';
+import { IdentityModule } from './contexts/identity/identity.module';
+import { AuthModule } from './shared/auth/auth.module';
 import { HealthController } from './health/HealthController';
 import { DomainExceptionFilter } from './shared/http/DomainExceptionFilter';
 
@@ -28,6 +30,8 @@ import { DomainExceptionFilter } from './shared/http/DomainExceptionFilter';
     WalletModule,
     CatalogModule,
     ComplianceModule,
+    IdentityModule,
+    AuthModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: DomainExceptionFilter }],

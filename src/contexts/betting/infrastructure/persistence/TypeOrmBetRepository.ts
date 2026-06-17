@@ -78,6 +78,13 @@ export class TypeOrmBetRepository implements BetRepository {
     return rows.map((row) => this.toBet(row));
   }
 
+  async listByUser(userId: string): Promise<Bet[]> {
+    const rows = await this.manager()
+      .getRepository(BetRecord)
+      .find({ where: { userId }, order: { createdAt: 'DESC' }, take: 100 });
+    return rows.map((row) => this.toBet(row));
+  }
+
   async findPendingByOutcomes(outcomeIds: string[]): Promise<Bet[]> {
     if (outcomeIds.length === 0) {
       return [];

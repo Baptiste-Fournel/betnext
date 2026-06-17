@@ -180,6 +180,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuthController_register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuthController_login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AuthController_me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -205,8 +253,6 @@ export interface components {
             odds: number;
         };
         PlaceBetRequest: {
-            /** @example demo-player */
-            userId: string;
             /** @example lol-finale-a */
             outcomeId: string;
             /**
@@ -381,13 +427,47 @@ export interface components {
             dailyCap: number | null;
         };
         SetDailyCapRequest: {
-            /** @example demo-player */
-            userId: string;
             /**
              * @description Plafond quotidien (> 0)
              * @example 50
              */
             cap: number;
+        };
+        RegisterRequest: {
+            /** @example demo-player */
+            username: string;
+            /** @example changeme123 */
+            password: string;
+        };
+        RegisterResultDto: {
+            /** @example a1b2c3 */
+            id: string;
+            /** @example demo-player */
+            username: string;
+            /** @example PLAYER */
+            role: string;
+        };
+        LoginRequest: {
+            /** @example demo-player */
+            username: string;
+            /** @example changeme123 */
+            password: string;
+        };
+        LoginResultDto: {
+            /** @example a1b2c3 */
+            userId: string;
+            /** @example PLAYER */
+            role: string;
+            /** @description Token Bearer à envoyer dans Authorization */
+            token: string;
+            /** @example 3600 */
+            expiresInSec: number;
+        };
+        MeDto: {
+            /** @example a1b2c3 */
+            userId: string;
+            /** @example PLAYER */
+            role: string;
         };
     };
     responses: never;
@@ -476,7 +556,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Liste des paris (non scopée — voir dette Identity) */
+            /** @description Paris de l'utilisateur authentifié uniquement */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -484,6 +564,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BetViewDto"][];
                 };
+            };
+            /** @description Token Bearer requis/invalide */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -511,6 +598,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PlaceBetResponse"];
                 };
+            };
+            /** @description Token Bearer requis/invalide */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Même Idempotency-Key réutilisée avec un corps différent */
             409: {
@@ -540,7 +634,14 @@ export interface operations {
                     "application/json": components["schemas"]["BetViewDto"];
                 };
             };
-            /** @description Pari introuvable */
+            /** @description Token Bearer requis/invalide */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pari introuvable (ou non possédé — anti-IDOR) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -569,6 +670,20 @@ export interface operations {
                     "application/json": components["schemas"]["BetEventDto"][];
                 };
             };
+            /** @description Token Bearer requis/invalide */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pari introuvable (ou non possédé — anti-IDOR) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     SettlementController_settle: {
@@ -584,7 +699,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Règlement effectué (comptes par statut) */
+            /** @description Règlement effectué (comptes par statut) — MANAGER */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -595,6 +710,20 @@ export interface operations {
             };
             /** @description outcomes vide, ou winningOutcomeId manquant sans voided */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token Bearer requis/invalide */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Réservé au rôle MANAGER */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -611,7 +740,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Rapport de réconciliation */
+            /** @description Rapport de réconciliation (MANAGER) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -619,6 +748,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ReconciliationReportDto"];
                 };
+            };
+            /** @description Token Bearer requis/invalide */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Réservé au rôle MANAGER */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -650,6 +793,20 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Token Bearer requis/invalide */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Réservé au rôle MANAGER */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Solde d'ouverture invalide (doit être >= 0) */
             422: {
                 headers: {
@@ -668,7 +825,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Marchés ouverts (modèle N-issues) */
+            /** @description Marchés ouverts (modèle N-issues) — PUBLIC */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -692,7 +849,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Marché créé */
+            /** @description Marché créé (MANAGER) */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -703,6 +860,20 @@ export interface operations {
             };
             /** @description Corps invalide (name/game/outcomes) */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token Bearer requis/invalide */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Réservé au rôle MANAGER */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -719,9 +890,7 @@ export interface operations {
     };
     ComplianceController_get: {
         parameters: {
-            query: {
-                userId: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -736,8 +905,8 @@ export interface operations {
                     "application/json": components["schemas"]["DailyCapDto"];
                 };
             };
-            /** @description query userId manquant */
-            400: {
+            /** @description Token Bearer requis/invalide */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -766,8 +935,15 @@ export interface operations {
                     "application/json": components["schemas"]["DailyCapDto"];
                 };
             };
-            /** @description Corps invalide (userId/cap) */
+            /** @description Corps invalide (cap) */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token Bearer requis/invalide */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -775,6 +951,92 @@ export interface operations {
             };
             /** @description Plafond invalide (doit être > 0) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AuthController_register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisterResultDto"];
+                };
+            };
+            /** @description Corps invalide (username/password/role) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AuthController_login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResultDto"];
+                };
+            };
+            /** @description Identifiants invalides */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AuthController_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeDto"];
+                };
+            };
+            /** @description Token Bearer requis/invalide */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

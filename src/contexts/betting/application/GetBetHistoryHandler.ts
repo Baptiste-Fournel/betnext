@@ -15,10 +15,18 @@ export interface BetEventView {
  * Le front l'AFFICHE ; il ne la reconstruit pas. Rend l'Event Sourcing (ADR-005) visible côté UI.
  */
 @QueryHandler(GetBetHistoryQuery)
-export class GetBetHistoryHandler implements IQueryHandler<GetBetHistoryQuery, BetEventView[]> {
+export class GetBetHistoryHandler implements IQueryHandler<
+  GetBetHistoryQuery,
+  BetEventView[] | null
+> {
   constructor(@Inject(BET_REPOSITORY) private readonly bets: BetRepository) {}
 
-  async execute(query: GetBetHistoryQuery): Promise<BetEventView[]> {
+  async execute(query: GetBetHistoryQuery): Promise<BetEventView[] | null> {
+    const bet = await this.bets.findById(query.betId);
+    if (!bet || bet.userId !== query.requesterUserId) {
+      // Anti-IDOR : la timeline d'un pari non possédé est indistincte de l'inexistant.
+      return null;
+    }
     const events = await this.bets.history(query.betId);
     return events.map((event) => ({
       seq: event.seq,

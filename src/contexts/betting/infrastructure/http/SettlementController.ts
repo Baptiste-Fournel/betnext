@@ -1,15 +1,21 @@
-import { BadRequestException, Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
+  ApiBearerAuth,
   ApiBody,
+  ApiForbiddenResponse,
   ApiOkResponse,
   ApiProperty,
   ApiPropertyOptional,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { CommandBus } from '@nestjs/cqrs';
 import { SettleMarketCommand } from '../../application/SettleMarketCommand';
 import { SettleMarketResult } from '../../application/SettleMarket';
+import { JwtAuthGuard } from '../../../../shared/auth/jwt-auth.guard';
+import { RolesGuard } from '../../../../shared/auth/roles.guard';
+import { Roles } from '../../../../shared/auth/roles.decorator';
 
 /** Corps de règlement : toutes les issues du marché + l'issue gagnante (ou annulation). */
 class SettleMarketRequest {
@@ -52,6 +58,9 @@ interface SettleBody {
  * alternative = event Game Integration sur le bus (même couture SettleMarket).
  */
 @ApiTags('markets')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('MANAGER')
 @Controller('markets')
 export class SettlementController {
   constructor(private readonly commandBus: CommandBus) {}
@@ -61,8 +70,10 @@ export class SettlementController {
   @ApiBody({ type: SettleMarketRequest })
   @ApiOkResponse({
     type: SettleMarketResultDto,
-    description: 'Règlement effectué (comptes par statut)',
+    description: 'Règlement effectué (comptes par statut) — MANAGER',
   })
+  @ApiUnauthorizedResponse({ description: 'Token Bearer requis/invalide' })
+  @ApiForbiddenResponse({ description: 'Réservé au rôle MANAGER' })
   @ApiBadRequestResponse({ description: 'outcomes vide, ou winningOutcomeId manquant sans voided' })
   settle(@Body() body: SettleBody): Promise<SettleMarketResultDto> {
     const { outcomes, winningOutcomeId, voided, strategyKey } = this.validate(body);

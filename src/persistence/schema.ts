@@ -5,6 +5,7 @@ import { IdempotencyKeyRecord } from '../contexts/betting/infrastructure/persist
 import { WalletRecord } from '../contexts/wallet/infrastructure/persistence/WalletRecord';
 import { WalletOperationRecord } from '../contexts/wallet/infrastructure/persistence/WalletOperationRecord';
 import { MarketRecord } from '../contexts/catalog/infrastructure/persistence/MarketRecord';
+import { UserRecord } from '../contexts/identity/infrastructure/persistence/UserRecord';
 import { ProcessedMessageRecord } from '../messaging/ProcessedMessageRecord';
 import { InitBetting1718200000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718200000000-InitBetting';
 import { InitWallet1718300000000 } from '../contexts/wallet/infrastructure/persistence/migrations/1718300000000-InitWallet';
@@ -15,6 +16,7 @@ import { InitWalletOperations1718700000000 } from '../contexts/wallet/infrastruc
 import { InitBetSettlementGuard1718800000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718800000000-InitBetSettlementGuard';
 import { InitCompliance1718900000000 } from '../contexts/compliance/infrastructure/persistence/migrations/1718900000000-InitCompliance';
 import { InitCatalog1719000000000 } from '../contexts/catalog/infrastructure/persistence/migrations/1719000000000-InitCatalog';
+import { InitIdentity1719100000000 } from '../contexts/identity/infrastructure/persistence/migrations/1719100000000-InitIdentity';
 
 /**
  * SOURCE UNIQUE du schéma (BET-19) : entités + migrations, importée par le runtime
@@ -30,6 +32,7 @@ export const ENTITIES = [
   WalletRecord,
   WalletOperationRecord,
   MarketRecord,
+  UserRecord,
   ProcessedMessageRecord,
 ];
 
@@ -43,4 +46,5 @@ export const MIGRATIONS = [
   InitBetSettlementGuard1718800000000,
   InitCompliance1718900000000,
   InitCatalog1719000000000,
+  InitIdentity1719100000000,
 ];

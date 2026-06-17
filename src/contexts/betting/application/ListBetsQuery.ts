@@ -1,2 +1,4 @@
-/** Query CQRS : lister les paris. NON scopée utilisateur tant qu'Identity n'existe pas (dette tracée). */
-export class ListBetsQuery {}
+/** Query CQRS : lister les paris de l'utilisateur authentifié (scoping anti-IDOR — BET-20). */
+export class ListBetsQuery {
+  constructor(public readonly userId: string) {}
+}

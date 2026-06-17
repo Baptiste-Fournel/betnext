@@ -1,25 +1,46 @@
 /* eslint-disable */
-// Seed REPRODUCTIBLE (BET-19) : un wallet de démo OUVERT (solde + entrée d'ouverture du ledger) et
-// UN marché N-issues. Idempotent (ON CONFLICT DO NOTHING) → rejouable sans doublon.
+// Seed REPRODUCTIBLE (BET-19 + BET-20) : deux VRAIS comptes (mots de passe HASHÉS) — un joueur et un
+// gestionnaire — chacun avec un wallet ouvert (solde + entrée d'ouverture du ledger), et UN marché
+// N-issues. Idempotent (ON CONFLICT DO NOTHING) → rejouable sans doublon.
 // Lancer : npm run db:seed   (utilise DATABASE_URL, défaut = Postgres local du docker-compose)
 const { DataSource } = require('typeorm');
+const { scryptSync, randomBytes } = require('node:crypto');
 
-const DEMO_USER = 'demo-player';
 const DEMO_OPENING = 100;
 const DEMO_MARKET_ID = 'mkt-demo-lol';
+const DEMO_PASSWORD = 'changeme123';
+// id = username (continuité : wallets/paris sont keyés par userId = id du compte authentifié).
+const ACCOUNTS = [
+  { id: 'demo-player', username: 'demo-player', role: 'PLAYER' },
+  { id: 'demo-manager', username: 'demo-manager', role: 'MANAGER' },
+];
+
+/** Hash scrypt au MÊME format que ScryptPasswordHasher (`scrypt$saltHex$hashHex`, clé 64 octets). */
+function hashPassword(plain) {
+  const salt = randomBytes(16);
+  return `scrypt$${salt.toString('hex')}$${scryptSync(plain, salt, 64).toString('hex')}`;
+}
+
+async function openWallet(ds, userId, opening) {
+  await ds.query(
+    'INSERT INTO wallets ("userId", "balance") VALUES ($1, $2) ON CONFLICT ("userId") DO NOTHING',
+    [userId, opening],
+  );
+  await ds.query(
+    'INSERT INTO wallet_operations ("opKey", "userId", "amount", "kind") VALUES ($1, $2, $3, $4) ON CONFLICT ("opKey") DO NOTHING',
+    [`opening:${userId}`, userId, opening, 'OPENING'],
+  );
+}
 
 /** Applique le seed sur une DataSource déjà initialisée + migrée. Idempotent. */
 async function runSeed(dataSource) {
-  // Wallet de démo : ouverture atomique (solde + entrée OPENING du ledger), comme le funding adapter.
-  await dataSource.query(
-    'INSERT INTO wallets ("userId", "balance") VALUES ($1, $2) ON CONFLICT ("userId") DO NOTHING',
-    [DEMO_USER, DEMO_OPENING],
-  );
-  await dataSource.query(
-    'INSERT INTO wallet_operations ("opKey", "userId", "amount", "kind") VALUES ($1, $2, $3, $4) ON CONFLICT ("opKey") DO NOTHING',
-    [`opening:${DEMO_USER}`, DEMO_USER, DEMO_OPENING, 'OPENING'],
-  );
-  // Un marché de démo (modèle N-issues : 3 issues).
+  for (const acc of ACCOUNTS) {
+    await dataSource.query(
+      'INSERT INTO users ("id", "username", "passwordHash", "role") VALUES ($1, $2, $3, $4) ON CONFLICT ("id") DO NOTHING',
+      [acc.id, acc.username, hashPassword(DEMO_PASSWORD), acc.role],
+    );
+    await openWallet(dataSource, acc.id, DEMO_OPENING);
+  }
   const outcomes = [
     { id: `${DEMO_MARKET_ID}-1`, label: 'Victoire Team A' },
     { id: `${DEMO_MARKET_ID}-2`, label: 'Victoire Team B' },
@@ -29,10 +50,10 @@ async function runSeed(dataSource) {
     'INSERT INTO markets ("id", "name", "game", "outcomes") VALUES ($1, $2, $3, $4::jsonb) ON CONFLICT ("id") DO NOTHING',
     [DEMO_MARKET_ID, 'BetNext Major — Team A vs Team B', 'LoL', JSON.stringify(outcomes)],
   );
-  return { user: DEMO_USER, opening: DEMO_OPENING, marketId: DEMO_MARKET_ID };
+  return { accounts: ACCOUNTS.map((a) => a.username), opening: DEMO_OPENING, marketId: DEMO_MARKET_ID };
 }
 
-module.exports = { runSeed, DEMO_USER, DEMO_OPENING, DEMO_MARKET_ID };
+module.exports = { runSeed, ACCOUNTS, DEMO_OPENING, DEMO_MARKET_ID, DEMO_PASSWORD };
 
 // Exécution CLI : connecte (DATABASE_URL), joue les migrations, applique le seed.
 if (require.main === module) {

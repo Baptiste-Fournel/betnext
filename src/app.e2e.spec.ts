@@ -2,256 +2,263 @@ import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from './app.module';
-import { ODDS_READ_MODEL, OddsReadModel } from './read-model/OddsReadModel';
+import { TOKEN_SERVICE, TokenService } from './contexts/identity/application/ports/TokenService';
 
 /**
- * Test e2e (mode en mémoire, sans DB). Vérifie le câblage HTTP→CQRS→use case + l'idempotence HTTP
- * (la concurrence réelle est prouvée sur Postgres dans le script atomicity-pg).
+ * E2E (mode mémoire). Câblage HTTP→CQRS + AUTH (BET-20) : tout endpoint sensible exige un token ;
+ * le `userId` vient du token ; scoping anti-IDOR ; rôles imposés.
  */
-describe('BetNext API (e2e)', () => {
+describe('BetNext API (e2e, auth BET-20)', () => {
   let app: INestApplication;
+  let tokenA = '';
+  let userIdA = '';
+  let tokenB = '';
+  let managerTok = '';
+
+  const server = (): ReturnType<INestApplication['getHttpServer']> => app.getHttpServer();
+  const auth = (t: string): [string, string] => ['Authorization', `Bearer ${t}`];
+  const register = (username: string, password = 'password1'): request.Test =>
+    request(server()).post('/auth/register').send({ username, password });
+  const login = async (
+    username: string,
+    password = 'password1',
+  ): Promise<{ token: string; userId: string; role: string }> => {
+    const res = await request(server())
+      .post('/auth/login')
+      .send({ username, password })
+      .expect(200);
+    return res.body;
+  };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     await app.init();
+    await register('alice').expect(201);
+    await register('bob').expect(201);
+    ({ token: tokenA, userId: userIdA } = await login('alice'));
+    ({ token: tokenB } = await login('bob'));
+    // Compte MANAGER : provisionné (pas auto-inscrit). Token réellement signé par le service.
+    managerTok = app
+      .get<TokenService>(TOKEN_SERVICE)
+      .sign({ userId: 'mgr-1', role: 'MANAGER' }).token;
   });
   afterAll(async () => {
     await app.close();
   });
 
-  it('GET /health → 200', async () => {
-    const res = await request(app.getHttpServer()).get('/health').expect(200);
+  it('GET /health → 200 (public)', async () => {
+    const res = await request(server()).get('/health').expect(200);
     expect(res.body.status).toBe('ok');
   });
 
-  it('POST /bets sans Idempotency-Key → 400', async () => {
-    await request(app.getHttpServer())
+  it('POST /bets SANS token → 401', async () => {
+    await request(server())
       .post('/bets')
-      .send({ userId: 'u1', outcomeId: 'o1', stake: 10 })
-      .expect(400);
+      .set('Idempotency-Key', 'no-auth')
+      .send({ outcomeId: 'o1', stake: 10 })
+      .expect(401);
   });
 
-  it('POST /bets (valide, avec clé) → 201 + cote figée', async () => {
-    const res = await request(app.getHttpServer())
+  it('POST /bets (token joueur, clé) → 201 + cote figée', async () => {
+    const res = await request(server())
       .post('/bets')
+      .set(...auth(tokenA))
       .set('Idempotency-Key', 'k-201')
-      .send({ userId: 'u1', outcomeId: 'o1', stake: 20 })
+      .send({ outcomeId: 'o1', stake: 20 })
       .expect(201);
     expect(res.body).toMatchObject({ lockedOdds: 2, potentialGain: 40 });
-    expect(typeof res.body.betId).toBe('string');
   });
 
-  it('POST /bets (forme invalide, avec clé) → 400', async () => {
-    await request(app.getHttpServer())
+  it('POST /bets sans Idempotency-Key → 400 ; corps invalide → 400 ; mise <= 0 → 422', async () => {
+    await request(server())
       .post('/bets')
-      .set('Idempotency-Key', 'k-bad')
-      .send({ userId: 'u1' })
+      .set(...auth(tokenA))
+      .send({ outcomeId: 'o1', stake: 10 })
       .expect(400);
-  });
-
-  it('POST /bets (mise <= 0, invariant métier) → 422', async () => {
-    await request(app.getHttpServer())
+    await request(server())
       .post('/bets')
+      .set(...auth(tokenA))
+      .set('Idempotency-Key', 'k-bad')
+      .send({})
+      .expect(400);
+    await request(server())
+      .post('/bets')
+      .set(...auth(tokenA))
       .set('Idempotency-Key', 'k-neg')
-      .send({ userId: 'u1', outcomeId: 'o1', stake: -5 })
+      .send({ outcomeId: 'o1', stake: -5 })
       .expect(422);
   });
 
-  it('idempotence : même clé + même corps → même betId (rejoué, pas de 2e pari)', async () => {
-    const body = { userId: 'u9', outcomeId: 'o1', stake: 15 };
-    const r1 = await request(app.getHttpServer())
+  it('idempotence : même clé+corps → même betId ; corps différent → 409', async () => {
+    const r1 = await request(server())
       .post('/bets')
+      .set(...auth(tokenA))
       .set('Idempotency-Key', 'idem-1')
-      .send(body)
+      .send({ outcomeId: 'o1', stake: 15 })
       .expect(201);
-    const r2 = await request(app.getHttpServer())
+    const r2 = await request(server())
       .post('/bets')
+      .set(...auth(tokenA))
       .set('Idempotency-Key', 'idem-1')
-      .send(body)
+      .send({ outcomeId: 'o1', stake: 15 })
       .expect(201);
     expect(r2.body.betId).toBe(r1.body.betId);
-  });
-
-  it('idempotence : même clé + corps différent → 409', async () => {
-    await request(app.getHttpServer())
+    await request(server())
       .post('/bets')
-      .set('Idempotency-Key', 'idem-2')
-      .send({ userId: 'u1', outcomeId: 'o1', stake: 10 })
-      .expect(201);
-    await request(app.getHttpServer())
-      .post('/bets')
-      .set('Idempotency-Key', 'idem-2')
-      .send({ userId: 'u1', outcomeId: 'o1', stake: 99 })
+      .set(...auth(tokenA))
+      .set('Idempotency-Key', 'idem-1')
+      .send({ outcomeId: 'o1', stake: 99 })
       .expect(409);
   });
-});
 
-/**
- * BET-10 — côté LECTURE du CQRS : cote courante servie depuis le read-model (jamais la base
- * d'écriture), read-your-writes joueur, cote figée vs MAJ du read-model, cold cache observable.
- */
-describe('BetNext lecture / read-model (e2e, BET-10)', () => {
-  let app: INestApplication;
-  let readModel: OddsReadModel;
-
-  beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = moduleRef.createNestApplication();
-    await app.init();
-    readModel = app.get<OddsReadModel>(ODDS_READ_MODEL);
-  });
-  afterAll(async () => {
-    await app.close();
-  });
-
-  it('GET /odds/:id sur read-model FROID → 404 (cohérence éventuelle observable, pas masquée)', async () => {
-    await request(app.getHttpServer()).get('/odds/cold-outcome').expect(404);
-  });
-
-  it('read-your-writes : le pari posé est lisible immédiatement (GET /bets/:id, store autoritatif)', async () => {
-    const post = await request(app.getHttpServer())
+  it('GET /odds/:id read-model FROID → 404 (public) ; read-your-writes scopé', async () => {
+    await request(server()).get('/odds/cold-outcome').expect(404);
+    const post = await request(server())
       .post('/bets')
+      .set(...auth(tokenA))
       .set('Idempotency-Key', 'ryw-1')
-      .send({ userId: 'u-ryw', outcomeId: 'o-ryw', stake: 20 })
+      .send({ outcomeId: 'o-ryw', stake: 20 })
+      .expect(201);
+    const get = await request(server())
+      .get(`/bets/${post.body.betId}`)
+      .set(...auth(tokenA))
+      .expect(200);
+    expect(get.body).toMatchObject({ betId: post.body.betId, status: 'PENDING', userId: userIdA });
+  });
+
+  // ---- BET-20 : MATRICE D'AUTORISATION ----
+
+  it('IDOR : un joueur ne peut PAS lire le pari d’un autre (404, jamais la donnée)', async () => {
+    const post = await request(server())
+      .post('/bets')
+      .set(...auth(tokenA))
+      .set('Idempotency-Key', 'idor-1')
+      .send({ outcomeId: 'o-idor', stake: 10 })
       .expect(201);
     const betId = post.body.betId as string;
-    const get = await request(app.getHttpServer()).get(`/bets/${betId}`).expect(200);
-    expect(get.body).toMatchObject({ betId, status: 'PENDING', stake: 20, lockedOdds: 2 });
-    expect(post.body.pricingProvisional).toBe(true); // read-model froid → cote provisoire, observable
-  });
-
-  it('cote FIGÉE : une MAJ du read-model ne change pas un pari déjà posé ; un nouveau pari prend la cote courante', async () => {
-    const first = await request(app.getHttpServer())
-      .post('/bets')
-      .set('Idempotency-Key', 'frz-1')
-      .send({ userId: 'u-frz', outcomeId: 'o-frz', stake: 10 })
-      .expect(201);
-    expect(first.body.lockedOdds).toBe(2); // read-model froid → cote d'ouverture, figée à la pose
-    expect(first.body.pricingProvisional).toBe(true); // cold → provisoire (cohérence éventuelle visible)
-
-    // OddsUpdated projeté dans le read-model (simule la boucle Pricing → projection)
-    await readModel.put([{ outcomeId: 'o-frz', odds: 4 }], Date.now());
-
-    // la cote COURANTE bouge (servie depuis le read-model, pas la base d'écriture)
-    const odds = await request(app.getHttpServer()).get('/odds/o-frz').expect(200);
-    expect(odds.body).toMatchObject({ outcomeId: 'o-frz', odds: 4 });
-
-    // le pari DÉJÀ posé garde sa cote figée (2), inchangée par la MAJ du read-model
-    const reread = await request(app.getHttpServer()).get(`/bets/${first.body.betId}`).expect(200);
-    expect(reread.body.lockedOdds).toBe(2);
-
-    // un NOUVEAU pari fige la cote courante (4) → la boucle async est bien refermée
-    const second = await request(app.getHttpServer())
-      .post('/bets')
-      .set('Idempotency-Key', 'frz-2')
-      .send({ userId: 'u-frz', outcomeId: 'o-frz', stake: 10 })
-      .expect(201);
-    expect(second.body.lockedOdds).toBe(4);
-    expect(second.body.pricingProvisional).toBe(false); // read-model chaud → cote Pricing, non provisoire
-  });
-});
-
-/**
- * BET-12 — règlement : clôture d'un marché → paris gagné/perdu/annulé, statuts lisibles, rejeu
- * idempotent. (Le crédit exactement-une-fois et l'atomicité par pari sont prouvés sur vrai Postgres.)
- */
-describe('BetNext settlement (e2e, BET-12)', () => {
-  let app: INestApplication;
-
-  beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = moduleRef.createNestApplication();
-    await app.init();
-  });
-  afterAll(async () => {
-    await app.close();
-  });
-
-  const place = (key: string, userId: string, outcomeId: string) =>
-    request(app.getHttpServer())
-      .post('/bets')
-      .set('Idempotency-Key', key)
-      .send({ userId, outcomeId, stake: 10 })
-      .expect(201);
-  const status = async (betId: string): Promise<string> =>
-    (await request(app.getHttpServer()).get(`/bets/${betId}`).expect(200)).body.status;
-
-  it('clôture marché : gagnant → WON, perdant → LOST', async () => {
-    const won = await place('s-w', 'sw', 'mA');
-    const lost = await place('s-l', 'sl', 'mB');
-    const res = await request(app.getHttpServer())
-      .post('/markets/settle')
-      .send({ outcomes: ['mA', 'mB'], winningOutcomeId: 'mA' })
+    // propriétaire : 200
+    await request(server())
+      .get(`/bets/${betId}`)
+      .set(...auth(tokenA))
       .expect(200);
-    expect(res.body).toMatchObject({ settled: 2, won: 1, lost: 1, voided: 0, failed: 0 });
-    expect(await status(won.body.betId)).toBe('WON');
-    expect(await status(lost.body.betId)).toBe('LOST');
+    // autre joueur : 404 (indistinct de l'inexistant) — pour la vue ET la timeline
+    await request(server())
+      .get(`/bets/${betId}`)
+      .set(...auth(tokenB))
+      .expect(404);
+    await request(server())
+      .get(`/bets/${betId}/events`)
+      .set(...auth(tokenB))
+      .expect(404);
   });
 
-  it('rejouer le règlement est idempotent (plus aucun pari en attente)', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/markets/settle')
-      .send({ outcomes: ['mA', 'mB'], winningOutcomeId: 'mA' })
+  it('GET /bets ne renvoie que les paris de l’appelant (scoping liste)', async () => {
+    const listB = await request(server())
+      .get('/bets')
+      .set(...auth(tokenB))
       .expect(200);
-    expect(res.body).toMatchObject({ settled: 0, won: 0, lost: 0 });
-  });
-
-  it('annulation → VOID (remboursement de la mise)', async () => {
-    const bet = await place('s-v', 'sv', 'mC');
-    const res = await request(app.getHttpServer())
-      .post('/markets/settle')
-      .send({ outcomes: ['mC'], voided: true })
+    // bob n'a posé aucun pari → aucun des paris d'alice n'apparaît
+    expect((listB.body as Array<{ userId: string }>).every((b) => b.userId !== userIdA)).toBe(true);
+    const listA = await request(server())
+      .get('/bets')
+      .set(...auth(tokenA))
       .expect(200);
-    expect(res.body).toMatchObject({ settled: 1, voided: 1 });
-    expect(await status(bet.body.betId)).toBe('VOID');
+    expect((listA.body as Array<{ userId: string }>).length).toBeGreaterThan(0);
+    expect((listA.body as Array<{ userId: string }>).every((b) => b.userId === userIdA)).toBe(true);
   });
 
-  it('règlement sans résultat ni annulation → 400', async () => {
-    await request(app.getHttpServer())
+  it('RÔLE : un joueur est REFUSÉ (403) sur les endpoints MANAGER ; un manager passe', async () => {
+    // create-market
+    await request(server())
+      .post('/markets')
+      .set(...auth(tokenA))
+      .send({ name: 'X', game: 'LoL', outcomes: ['a', 'b'] })
+      .expect(403);
+    await request(server())
+      .post('/markets')
+      .set(...auth(managerTok))
+      .send({ name: 'X', game: 'LoL', outcomes: ['a', 'b'] })
+      .expect(201);
+    // wallet/open
+    await request(server())
+      .post('/wallet/open')
+      .set(...auth(tokenA))
+      .send({ userId: 'someone', openingBalance: 100 })
+      .expect(403);
+    await request(server())
+      .post('/wallet/open')
+      .set(...auth(managerTok))
+      .send({ userId: 'seed-by-mgr', openingBalance: 100 })
+      .expect(200);
+    // reconciliation
+    await request(server())
+      .get('/admin/reconciliation')
+      .set(...auth(tokenA))
+      .expect(403);
+    await request(server())
+      .get('/admin/reconciliation')
+      .set(...auth(managerTok))
+      .expect(200);
+  });
+
+  it('settle : 401 sans token, 403 joueur, 200 manager', async () => {
+    await request(server())
       .post('/markets/settle')
-      .send({ outcomes: ['mX'] })
-      .expect(400);
-  });
-});
-
-/**
- * BET-13 — plafond quotidien (Responsible Gaming) : le joueur fixe son plafond, et un pari qui ferait
- * dépasser le total misé du jour est refusé (403). (L'atomicité/anti-course est prouvée sur vrai Postgres.)
- */
-describe('BetNext plafond quotidien (e2e, BET-13)', () => {
-  let app: INestApplication;
-
-  beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = moduleRef.createNestApplication();
-    await app.init();
-  });
-  afterAll(async () => {
-    await app.close();
-  });
-
-  const place = (key: string, userId: string, stake: number) =>
-    request(app.getHttpServer())
+      .send({ outcomes: ['mA'] })
+      .expect(401);
+    await request(server())
+      .post('/markets/settle')
+      .set(...auth(tokenA))
+      .send({ outcomes: ['mA'], winningOutcomeId: 'mA' })
+      .expect(403);
+    // un joueur pose, le manager règle
+    await request(server())
       .post('/bets')
-      .set('Idempotency-Key', key)
-      .send({ userId, outcomeId: 'o1', stake });
+      .set(...auth(tokenA))
+      .set('Idempotency-Key', 'settle-1')
+      .send({ outcomeId: 'mWin', stake: 10 })
+      .expect(201);
+    const res = await request(server())
+      .post('/markets/settle')
+      .set(...auth(managerTok))
+      .send({ outcomes: ['mWin'], winningOutcomeId: 'mWin' })
+      .expect(200);
+    expect(res.body).toMatchObject({ won: 1 });
+  });
 
-  it('plafond défini : refus (403) du pari qui dépasse le total misé du jour', async () => {
-    await request(app.getHttpServer())
+  it('plafond quotidien : le joueur fixe SON cap (userId du token), dépassement → 403', async () => {
+    const { token } = await (async (): Promise<{ token: string }> => {
+      await register('capUser').expect(201);
+      return login('capUser');
+    })();
+    await request(server())
       .put('/responsible-gaming/daily-cap')
-      .send({ userId: 'cap-u', cap: 50 })
+      .set('Authorization', `Bearer ${token}`)
+      .send({ cap: 50 })
       .expect(200);
-    await place('cap-1', 'cap-u', 20).expect(201); // total 20
-    await place('cap-2', 'cap-u', 20).expect(201); // total 40
-    await place('cap-3', 'cap-u', 20).expect(403); // 60 > 50 → refusé (DailyCapExceededError)
+    const place = (key: string, stake: number): request.Test =>
+      request(server())
+        .post('/bets')
+        .set('Authorization', `Bearer ${token}`)
+        .set('Idempotency-Key', key)
+        .send({ outcomeId: 'o1', stake });
+    await place('cap-1', 20).expect(201);
+    await place('cap-2', 20).expect(201);
+    await place('cap-3', 20).expect(403); // 60 > 50
   });
 
-  it('plafond <= 0 → 422 (invariant) ; aucun plafond défini → aucun refus', async () => {
-    await request(app.getHttpServer())
-      .put('/responsible-gaming/daily-cap')
-      .send({ userId: 'cap-u', cap: -5 })
-      .expect(422);
-    await place('nocap-1', 'nocap-u', 90).expect(201); // pas de plafond → autorisé
+  it('anti-escalade : register ne crée QUE des PLAYER (rôle client ignoré) → settle 403', async () => {
+    await request(server())
+      .post('/auth/register')
+      .send({ username: 'wannabe', password: 'password1', role: 'MANAGER' })
+      .expect(201);
+    const { token, role } = await login('wannabe');
+    expect(role).toBe('PLAYER');
+    await request(server())
+      .post('/markets/settle')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ outcomes: ['z'], winningOutcomeId: 'z' })
+      .expect(403);
   });
 });

@@ -25,7 +25,8 @@ export class GetBetHandler implements IQueryHandler<GetBetQuery, BetView | null>
 
   async execute(query: GetBetQuery): Promise<BetView | null> {
     const bet = await this.bets.findById(query.betId);
-    if (!bet) {
+    if (!bet || bet.userId !== query.requesterUserId) {
+      // Inexistant OU non possédé → réponse INDISTINCTE (anti-IDOR : aucune fuite d'existence).
       return null;
     }
     return {

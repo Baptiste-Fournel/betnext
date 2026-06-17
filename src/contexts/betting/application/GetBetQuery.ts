@@ -1,4 +1,7 @@
-/** Query CQRS : lire un pari (données joueur) — read-your-writes depuis le store autoritatif. */
+/** Query CQRS : lire un pari (read-your-writes). `requesterUserId` (du token) → scoping anti-IDOR. */
 export class GetBetQuery {
-  constructor(public readonly betId: string) {}
+  constructor(
+    public readonly betId: string,
+    public readonly requesterUserId: string,
+  ) {}
 }

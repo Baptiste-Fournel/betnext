@@ -37,7 +37,8 @@ function statusVariant(status: string): 'default' | 'secondary' | 'destructive' 
 /**
  * Historique des paris : liste (GET /bets) + TIMELINE de chaque pari (GET /bets/:id/events) lue
  * depuis le journal d'événements du back → Event Sourcing VISIBLE (le front affiche, ne reconstruit pas).
- * États gérés : chargement (skeleton), erreur (+ réessayer), vide. (Liste non scopée — dette Identity.)
+ * États gérés : chargement (skeleton), erreur (+ réessayer), vide. (GET /bets est scopé à
+ * l'utilisateur authentifié côté serveur — BET-20 ; le token est ajouté par le middleware du client.)
  */
 export function HistoryPanel({ refreshKey }: { refreshKey: number }): React.JSX.Element {
   const [bets, setBets] = useState<Bet[] | null>(null);

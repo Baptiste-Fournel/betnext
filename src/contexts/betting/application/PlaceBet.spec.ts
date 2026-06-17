@@ -20,6 +20,10 @@ class InMemoryBets implements BetRepository {
     return [];
   }
 
+  async listByUser(): Promise<Bet[]> {
+    return [];
+  }
+
   async findPendingByOutcomes(): Promise<Bet[]> {
     return [];
   }

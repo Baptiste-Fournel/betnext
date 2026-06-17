@@ -1,6 +1,16 @@
-import { Controller, Get } from '@nestjs/common';
-import { ApiOkResponse, ApiProperty, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, UseGuards } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiForbiddenResponse,
+  ApiOkResponse,
+  ApiProperty,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 import { ReconcileWallets, ReconciliationReport } from '../../application/ReconcileWallets';
+import { JwtAuthGuard } from '../../../../shared/auth/jwt-auth.guard';
+import { RolesGuard } from '../../../../shared/auth/roles.guard';
+import { Roles } from '../../../../shared/auth/roles.decorator';
 
 class WalletDriftDto {
   @ApiProperty({ example: 'demo-player' })
@@ -29,17 +39,25 @@ class ReconciliationReportDto {
 }
 
 /**
- * Réconciliation argent SUR DEMANDE (BET-15) : produit un RAPPORT (Σ ledger vs solde) pour chaque
- * wallet. Lecture seule, idempotent, AUCUNE auto-correction (une dérive se signale, elle ne se corrige
- * pas en douce). Schedulable plus tard sans changement (mêmes garanties).
+ * Réconciliation argent SUR DEMANDE (BET-15) — réservée au rôle **MANAGER** (BET-20) : le rapport
+ * expose les soldes/écarts de TOUS les wallets (donnée sensible d'exploitation). Lecture seule,
+ * idempotent, AUCUNE auto-correction.
  */
 @ApiTags('reconciliation')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('MANAGER')
 @Controller('admin')
 export class ReconciliationController {
   constructor(private readonly reconcile: ReconcileWallets) {}
 
   @Get('reconciliation')
-  @ApiOkResponse({ type: ReconciliationReportDto, description: 'Rapport de réconciliation' })
+  @ApiOkResponse({
+    type: ReconciliationReportDto,
+    description: 'Rapport de réconciliation (MANAGER)',
+  })
+  @ApiUnauthorizedResponse({ description: 'Token Bearer requis/invalide' })
+  @ApiForbiddenResponse({ description: 'Réservé au rôle MANAGER' })
   run(): Promise<ReconciliationReport> {
     return this.reconcile.execute();
   }

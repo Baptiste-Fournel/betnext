@@ -1,13 +1,13 @@
 /* eslint-disable */
-// BET-19 : prouve qu'un SCHÉMA VIERGE devient une app fonctionnelle sur Postgres, que les migrations
-// sont IDEMPOTENTES/REJOUABLES, et que le seed est REPRODUCTIBLE. Sur un vrai Postgres embarqué.
-// Lancer : npm run test:bootstrap:pg
+// BET-19/BET-20 : prouve qu'un SCHÉMA VIERGE devient une app fonctionnelle sur Postgres, que les
+// migrations sont IDEMPOTENTES/REJOUABLES, et que le seed est REPRODUCTIBLE (comptes + wallets +
+// marché). Sur un vrai Postgres embarqué. Lancer : npm run test:bootstrap:pg
 require('reflect-metadata');
 const assert = require('node:assert');
 const { rmSync } = require('node:fs');
 const { DataSource } = require('typeorm');
 const { ENTITIES, MIGRATIONS } = require('../dist/persistence/schema.js');
-const { runSeed, DEMO_USER, DEMO_MARKET_ID } = require('./seed.cjs');
+const { runSeed, ACCOUNTS, DEMO_MARKET_ID } = require('./seed.cjs');
 
 const DATA_DIR = '/tmp/pgdata_betnext_bootstrap';
 const PORT = 55438;
@@ -22,6 +22,7 @@ const TABLES = [
   'rg_caps',
   'rg_daily_stakes',
   'markets',
+  'users',
 ];
 
 (async () => {
@@ -37,7 +38,7 @@ const TABLES = [
 
   // 1) SCHÉMA VIERGE → migrations jouées ; toutes les tables existent (app fonctionnelle)
   const applied = await ds.runMigrations();
-  assert.ok(applied.length >= 9, `attendu >= 9 migrations, obtenu ${applied.length}`);
+  assert.ok(applied.length >= 10, `attendu >= 10 migrations, obtenu ${applied.length}`);
   for (const t of TABLES) {
     await ds.query(`SELECT count(*)::int AS c FROM "${t}"`); // ne lève pas → table présente
   }
@@ -51,26 +52,37 @@ const TABLES = [
   //    CREATE OR REPLACE / DROP ... IF EXISTS rendent chaque up() sûr (aucune erreur)
   await ds.query('DROP TABLE IF EXISTS "migrations"');
   const replay = await ds.runMigrations();
-  assert.ok(replay.length >= 9, 'rejeu complet des migrations sans erreur (idempotence SQL)');
+  assert.ok(replay.length >= 10, 'rejeu complet des migrations sans erreur (idempotence SQL)');
   console.log('✓ migrations idempotentes : 2e run = 0 en attente, et rejeu SQL complet sans erreur');
 
-  // 4) SEED REPRODUCTIBLE : 2 exécutions → pas de doublon, invariant ledger tenu
+  // 4) SEED REPRODUCTIBLE : 2 exécutions → pas de doublon ; comptes + wallets fonctionnels
   await runSeed(ds);
   await runSeed(ds); // rejeu
-  const bal = Number((await ds.query('SELECT balance FROM wallets WHERE "userId"=$1', [DEMO_USER]))[0].balance);
-  const led = await ds.query('SELECT COALESCE(SUM(amount),0) AS s, count(*)::int AS c FROM wallet_operations WHERE "userId"=$1', [DEMO_USER]);
-  assert.strictEqual(bal, 100);
-  assert.strictEqual(Number(led[0].s), 100); // Σ ledger == solde (invariant BET-15 tenu par le seed)
-  assert.strictEqual(led[0].c, 1); // une seule entrée d'ouverture (rejeu sans doublon)
+  // 4a) deux comptes, mots de passe HASHÉS (jamais en clair)
+  assert.strictEqual((await ds.query('SELECT count(*)::int AS c FROM users'))[0].c, ACCOUNTS.length);
+  const hashes = await ds.query('SELECT "passwordHash" FROM users');
+  for (const row of hashes) {
+    assert.ok(row.passwordHash.startsWith('scrypt$'), 'mot de passe stocké haché (scrypt)');
+    assert.ok(!row.passwordHash.includes('changeme'), 'aucun mot de passe en clair stocké');
+  }
+  // 4b) chaque compte a un wallet ouvert, invariant Σ(ledger) == solde tenu, sans doublon au rejeu
+  for (const acc of ACCOUNTS) {
+    const bal = Number((await ds.query('SELECT balance FROM wallets WHERE "userId"=$1', [acc.id]))[0].balance);
+    const led = await ds.query('SELECT COALESCE(SUM(amount),0) AS s, count(*)::int AS c FROM wallet_operations WHERE "userId"=$1', [acc.id]);
+    assert.strictEqual(bal, 100);
+    assert.strictEqual(Number(led[0].s), 100);
+    assert.strictEqual(led[0].c, 1); // une seule entrée d'ouverture (rejeu sans doublon)
+  }
+  // 4c) un marché à 3 issues, sans doublon
   const market = await ds.query('SELECT jsonb_array_length(outcomes) AS n FROM markets WHERE id=$1', [DEMO_MARKET_ID]);
   assert.strictEqual(market.length, 1);
-  assert.strictEqual(Number(market[0].n), 3); // marché à 3 issues
-  assert.strictEqual((await ds.query('SELECT count(*)::int AS c FROM markets'))[0].c, 1); // pas de doublon de marché
-  console.log('✓ seed reproductible : wallet demo (solde 100, Σ ledger=100, 1 ouverture) + 1 marché 3 issues, rejeu sans doublon');
+  assert.strictEqual(Number(market[0].n), 3);
+  assert.strictEqual((await ds.query('SELECT count(*)::int AS c FROM markets'))[0].c, 1);
+  console.log(`✓ seed reproductible : ${ACCOUNTS.length} comptes hashés + wallets (Σ ledger=solde=100) + 1 marché 3 issues, rejeu sans doublon`);
 
   await ds.destroy();
   await pg.stop();
-  console.log('\nBOOTSTRAP PG REEL : OK — schéma vierge → app fonctionnelle, migrations idempotentes/rejouables, seed reproductible (BET-19).');
+  console.log('\nBOOTSTRAP PG REEL : OK — schéma vierge → app fonctionnelle, migrations idempotentes/rejouables, seed reproductible (BET-19/BET-20).');
   process.exit(0);
 })().catch((e) => {
   console.error('ECHEC:', e && e.stack ? e.stack : e);

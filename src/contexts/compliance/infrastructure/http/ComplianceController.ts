@@ -1,15 +1,19 @@
-import { BadRequestException, Body, Controller, Get, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
+  ApiBearerAuth,
   ApiBody,
   ApiOkResponse,
   ApiProperty,
-  ApiQuery,
   ApiTags,
+  ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { SetDailyCap } from '../../application/SetDailyCap';
 import { GetDailyCap } from '../../application/GetDailyCap';
+import { JwtAuthGuard } from '../../../../shared/auth/jwt-auth.guard';
+import { CurrentUser } from '../../../../shared/auth/current-user.decorator';
+import { AuthUser } from '../../../../shared/auth/auth-user';
 
 /** Plafond quotidien du joueur (Responsible Gaming). `dailyCap` null = aucun plafond défini. */
 class DailyCapDto {
@@ -24,21 +28,25 @@ class DailyCapDto {
   dailyCap!: number | null;
 }
 
-/** Corps de PUT /responsible-gaming/daily-cap (exposé au contrat). */
+/** Corps de PUT /responsible-gaming/daily-cap : le cap seulement (le userId vient du token). */
 class SetDailyCapRequest {
-  @ApiProperty({ example: 'demo-player' })
-  userId!: string;
   @ApiProperty({ example: 50, minimum: 0, description: 'Plafond quotidien (> 0)' })
   cap!: number;
 }
 
 interface CapBody {
-  userId?: unknown;
   cap?: unknown;
 }
 
-/** Adapter HTTP : le joueur consulte (GET) et définit (PUT) son plafond quotidien. */
+/**
+ * Adapter HTTP (BET-20) : AUTHENTIFIÉ. Le joueur consulte (GET) et définit (PUT) SON PROPRE plafond.
+ * Le `userId` vient TOUJOURS du token (jamais du corps/query) → un joueur ne peut agir que sur son
+ * propre plafond (pas d'IDOR).
+ */
 @ApiTags('responsible-gaming')
+@ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: 'Token Bearer requis/invalide' })
+@UseGuards(JwtAuthGuard)
 @Controller('responsible-gaming')
 export class ComplianceController {
   constructor(
@@ -47,30 +55,22 @@ export class ComplianceController {
   ) {}
 
   @Get('daily-cap')
-  @ApiQuery({ name: 'userId', required: true, example: 'demo-player' })
   @ApiOkResponse({ type: DailyCapDto })
-  @ApiBadRequestResponse({ description: 'query userId manquant' })
-  async get(@Query('userId') userId?: string): Promise<DailyCapDto> {
-    const id = typeof userId === 'string' ? userId.trim() : '';
-    if (!id) {
-      throw new BadRequestException('query userId requis');
-    }
-    return { userId: id, dailyCap: await this.getDailyCap.execute(id) };
+  async get(@CurrentUser() user: AuthUser): Promise<DailyCapDto> {
+    return { userId: user.userId, dailyCap: await this.getDailyCap.execute(user.userId) };
   }
 
   @Put('daily-cap')
   @ApiBody({ type: SetDailyCapRequest })
   @ApiOkResponse({ type: DailyCapDto })
-  @ApiBadRequestResponse({ description: 'Corps invalide (userId/cap)' })
+  @ApiBadRequestResponse({ description: 'Corps invalide (cap)' })
   @ApiUnprocessableEntityResponse({ description: 'Plafond invalide (doit être > 0)' })
-  async set(@Body() body: CapBody): Promise<DailyCapDto> {
-    const userId = typeof body.userId === 'string' ? body.userId.trim() : '';
+  async set(@CurrentUser() user: AuthUser, @Body() body: CapBody): Promise<DailyCapDto> {
     const cap = typeof body.cap === 'number' ? body.cap : NaN;
-    const errors: string[] = [];
-    if (!userId) errors.push('userId (string non vide) requis');
-    if (!Number.isFinite(cap)) errors.push('cap (nombre) requis');
-    if (errors.length > 0) throw new BadRequestException(errors);
-    await this.setDailyCap.execute(userId, cap);
-    return { userId, dailyCap: cap };
+    if (!Number.isFinite(cap)) {
+      throw new BadRequestException('cap (nombre) requis');
+    }
+    await this.setDailyCap.execute(user.userId, cap);
+    return { userId: user.userId, dailyCap: cap };
   }
 }

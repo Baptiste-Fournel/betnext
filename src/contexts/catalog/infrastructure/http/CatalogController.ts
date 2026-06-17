@@ -1,15 +1,30 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, Inject, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
+  ApiBearerAuth,
   ApiBody,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiOkResponse,
   ApiProperty,
   ApiTags,
+  ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { MARKET_CATALOG, MarketCatalog } from '../../application/ports/MarketCatalog';
 import { CreateMarket } from '../../application/CreateMarket';
+import { JwtAuthGuard } from '../../../../shared/auth/jwt-auth.guard';
+import { RolesGuard } from '../../../../shared/auth/roles.guard';
+import { Roles } from '../../../../shared/auth/roles.decorator';
 
 class OutcomeDto {
   @ApiProperty({ example: 'lol-finale-a' })
@@ -43,7 +58,11 @@ interface CreateMarketBody {
   outcomes?: unknown;
 }
 
-/** Catalog : lecture (GET) + création par le gestionnaire (POST). La cote courante se lit via GET /odds/:id. */
+/**
+ * Catalog. CLASSIFICATION (BET-20) : GET /markets est PUBLIC (catalogue non user-spécifique) ;
+ * POST /markets est réservé au rôle MANAGER (création par le gestionnaire). La cote courante se lit
+ * via GET /odds/:id (public).
+ */
 @ApiTags('catalog')
 @Controller('markets')
 export class CatalogController {
@@ -53,16 +72,21 @@ export class CatalogController {
   ) {}
 
   @Get()
-  @ApiOkResponse({ type: [MarketDto], description: 'Marchés ouverts (modèle N-issues)' })
+  @ApiOkResponse({ type: [MarketDto], description: 'Marchés ouverts (modèle N-issues) — PUBLIC' })
   list(): Promise<MarketDto[]> {
     return this.catalog.listOpenMarkets();
   }
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('MANAGER')
+  @ApiBearerAuth()
   @HttpCode(201)
   @ApiBody({ type: CreateMarketRequest })
-  @ApiCreatedResponse({ type: MarketDto, description: 'Marché créé' })
+  @ApiCreatedResponse({ type: MarketDto, description: 'Marché créé (MANAGER)' })
   @ApiBadRequestResponse({ description: 'Corps invalide (name/game/outcomes)' })
+  @ApiUnauthorizedResponse({ description: 'Token Bearer requis/invalide' })
+  @ApiForbiddenResponse({ description: 'Réservé au rôle MANAGER' })
   @ApiUnprocessableEntityResponse({ description: 'Marché invalide (≥ 2 issues requises)' })
   create(@Body() body: CreateMarketBody): Promise<MarketDto> {
     const { name, game, outcomes } = this.validate(body);

@@ -35,6 +35,12 @@ export class InMemoryBetRepository implements BetRepository {
     );
   }
 
+  async listByUser(userId: string): Promise<Bet[]> {
+    return [...this.snapshots.values()]
+      .filter((bet) => bet.userId === userId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
   async findPendingByOutcomes(outcomeIds: string[]): Promise<Bet[]> {
     const wanted = new Set(outcomeIds);
     return [...this.snapshots.values()].filter(
