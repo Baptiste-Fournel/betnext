@@ -1,37 +1,31 @@
 {
-  "name": "@betnext/web",
+  "name": "@betnext/frontend",
   "version": "0.1.0",
   "private": true,
-  "description": "Front BetNext (Next.js App Router). Client MINCE : zéro logique métier, type-safe contre l'OpenAPI du back.",
+  "description": "Monorepo front BetNext (npm workspaces) : deux apps Next.js (joueur, admin) partageant le contrat OpenAPI généré et des composants communs. Clients MINCES : zéro logique métier (elle reste back).",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "dev": "next dev -p 3001",
-    "build": "next build",
-    "start": "next start -p 3001",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit",
-    "generate:api": "openapi-typescript ../packages/api-contract/openapi.json -o src/lib/api/schema.d.ts"
-  },
-  "dependencies": {
-    "next": "^14.2.5",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "openapi-fetch": "^0.13.0",
-    "class-variance-authority": "^0.7.0",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.2",
-    "lucide-react": "^0.439.0",
-    "tailwindcss-animate": "^1.0.7"
+    "generate:api": "npm run generate --workspace @betnext/api-contract",
+    "dev:player": "npm run dev --workspace @betnext/web-player",
+    "dev:admin": "npm run dev --workspace @betnext/web-admin",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
   },
   "devDependencies": {
     "@types/node": "^22.5.0",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
-    "typescript": "^5.6.2",
-    "tailwindcss": "^3.4.10",
-    "postcss": "^8.4.45",
     "autoprefixer": "^10.4.20",
-    "openapi-typescript": "^7.13.0",
     "eslint": "^8.57.0",
-    "eslint-config-next": "^14.2.5"
+    "eslint-config-next": "^14.2.5",
+    "openapi-typescript": "^7.13.0",
+    "postcss": "^8.4.45",
+    "tailwindcss": "^3.4.10",
+    "tailwindcss-animate": "^1.0.7",
+    "typescript": "^5.6.2"
   }
 }

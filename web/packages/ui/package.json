@@ -1,0 +1,27 @@
+{
+  "name": "@betnext/ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Composants & client API COMMUNS aux deux apps BetNext (primitives shadcn/ui, auth, client typé openapi-fetch, coquille de rôle). Factorisé pour éviter tout copier-coller entre apps.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./globals.css": "./src/globals.css"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@betnext/api-contract": "*",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "openapi-fetch": "^0.13.0",
+    "tailwind-merge": "^2.5.2"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

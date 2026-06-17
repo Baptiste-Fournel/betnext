@@ -1,0 +1,16 @@
+{
+  "name": "@betnext/api-contract",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Contrat OpenAPI du back, surfacé au front en types TypeScript GÉNÉRÉS (jamais écrits à la main). Source unique partagée par les deux apps et le package UI.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "openapi-typescript ../../../packages/api-contract/openapi.json -o src/schema.d.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

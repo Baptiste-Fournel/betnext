@@ -279,24 +279,31 @@ plafond → seul le total autorisé passe ; retry même clé → mise comptée u
 > trancher ; le total est **brut** — pas encore **net** des annulations/remboursements (un pari VOID
 > ne libère pas le plafond ; nécessiterait que le règlement appelle un *release* RG → suivi séparé).
 
-## Front (Next.js) — BET-14 (épic)
+## Front (monorepo Next.js) — BET-14, BET-22 (épic)
 
-App **Next.js** (App Router, TS strict, Tailwind + shadcn/ui) dans `web/`, à côté du back. C'est un
-**client MINCE** : aucune logique métier (elle reste dans le domaine back). Détails : `web/README.md`.
+**Monorepo front** (workspaces npm) dans `web/` : **deux apps Next.js séparées par rôle** —
+`apps/player` (rôle PLAYER, :3001) et `apps/admin` (rôle MANAGER, :3002) — partageant le contrat
+OpenAPI généré (`packages/api-contract`) et les composants communs (`packages/ui` : primitives
+shadcn/ui, auth, client typé, coquille de rôle `<AppShell>`). App Router, TS strict, Tailwind. Ce sont
+des **clients MINCES** : aucune logique métier (elle reste dans le domaine back). Détails : `web/README.md`.
 
 **Client API typé GÉNÉRÉ** (jamais écrit à la main), pipeline reproductible :
 
 ```bash
-npm run api:contract   # (racine) back → packages/api-contract/openapi.json → web/src/lib/api/schema.d.ts
-cd web && npm install && npm run dev   # http://localhost:3001
+npm run api:contract   # (racine) back → packages/api-contract/openapi.json → web/packages/api-contract/src/schema.d.ts
+cd web && npm install
+npm run dev:player     # http://localhost:3001   |   npm run dev:admin  # http://localhost:3002
 ```
 
 - Contrat partagé : `packages/api-contract/openapi.json` (émis par le back via `@nestjs/swagger` ;
   Swagger UI sur `/docs`).
-- Types : `web/src/lib/api/schema.d.ts` (`openapi-typescript`) ; client `openapi-fetch` type-safe
-  (`web/src/lib/api/client.ts`). Une **garde compile-time** (`contract.guard.ts`, vérifiée par le job
-  CI `web-typecheck`) prouve qu'un chemin hors-contrat est **rejeté à la compilation**.
-- **Frontière** : le front n'importe QUE le contrat généré, jamais le code interne du back.
+- Types : `web/packages/api-contract/src/schema.d.ts` (`openapi-typescript`) ; client `openapi-fetch`
+  type-safe (`web/packages/ui/src/lib/api/client.ts`). Une **garde compile-time** (`contract.guard.ts`,
+  vérifiée par le job CI `web-build`) prouve qu'un chemin hors-contrat est **rejeté à la compilation**.
+- **Scoping par rôle** : chaque app guarde son rôle via `<AppShell>` (UX) ; l'**autorité reste 100 %
+  serveur** (token BET-20 — un player qui forcerait l'app admin n'obtient que des 403 du back).
+- **Frontière** : le front n'importe QUE le contrat généré, jamais le code interne du back ; les apps
+  ne partagent QUE via `@betnext/ui` / `@betnext/api-contract` (zéro copier-coller inter-app).
 
 **Incrément 1** — écran connecté : appelle `GET /health` (URL API via `NEXT_PUBLIC_API_BASE_URL`).
 

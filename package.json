@@ -29,7 +29,7 @@
     "test:pricing:redis": "npm run build && node scripts/pricing-redis.cjs",
     "test:readmodel:redis": "npm run build && node scripts/readmodel-redis.cjs",
     "openapi:generate": "npm run build && node scripts/generate-openapi.cjs",
-    "api:types": "openapi-typescript packages/api-contract/openapi.json -o web/src/lib/api/schema.d.ts",
+    "api:types": "npm --prefix web run generate:api",
     "api:contract": "npm run openapi:generate && npm run api:types"
   },
   "dependencies": {
