@@ -3,36 +3,30 @@
 import type { ReactNode } from 'react';
 import { useAuth, type Role } from './auth/auth-context';
 import { LoginScreen } from './auth/login-screen';
-import { SessionBar } from './auth/session-bar';
+import { AppHeader } from './auth/app-header';
 import { Button, buttonVariants } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Skeleton } from './ui/skeleton';
 import { cn } from '../lib/utils';
 
 const ROLE_LABEL: Record<Role, string> = { PLAYER: 'joueur', MANAGER: 'gestionnaire' };
+const ROLE_TAG: Record<Role, string> = { PLAYER: 'Joueur', MANAGER: 'Gestionnaire' };
 
-/**
- * Coquille AUTH + SCOPING PAR RÔLE, PARTAGÉE par les deux apps. Chaque app déclare le rôle qu'elle
- * sert (`role`) ; la coquille décide quoi rendre :
- *   chargement → squelette ; anonyme → login (compte de démo de l'app) ;
- *   authentifié mais MAUVAIS rôle → écran « mauvaise interface » (+ lien vers l'app du rôle) ;
- *   authentifié et BON rôle → barre de session + la vue de l'app.
- *
- * IMPORTANT (anti-contournement) : ce garde côté client ne fait que PILOTER L'UX. L'autorité reste
- * 100 % serveur — chaque appel API est scopé par le token (BET-20), donc un joueur qui forcerait
- * l'app admin n'obtiendrait que des 403/données vides du back. Le front ne décide JAMAIS des droits.
- */
+const MAX_WIDTH = { default: 'max-w-2xl', wide: 'max-w-5xl' } as const;
+
 export function AppShell({
   role,
   loginDefaultUsername,
   siblingAppLabel,
   siblingAppHref,
+  maxWidth = 'default',
   children,
 }: {
   role: Role;
   loginDefaultUsername?: string;
   siblingAppLabel?: string;
   siblingAppHref?: string;
+  maxWidth?: keyof typeof MAX_WIDTH;
   children: ReactNode;
 }): React.JSX.Element {
   const { status, user, logout } = useAuth();
@@ -40,7 +34,7 @@ export function AppShell({
   if (status === 'loading') {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-4 p-8">
-        <Skeleton className="h-8 w-40" />
+        <Skeleton className="h-9 w-44" />
         <Skeleton className="h-40 w-full" />
       </main>
     );
@@ -77,8 +71,8 @@ export function AppShell({
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-6 p-4 sm:p-8">
-      <SessionBar />
+    <main className={cn('mx-auto flex min-h-screen w-full flex-col gap-6 p-4 sm:p-8', MAX_WIDTH[maxWidth])}>
+      <AppHeader tag={ROLE_TAG[role]} />
       {children}
     </main>
   );

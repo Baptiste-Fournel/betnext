@@ -5,9 +5,11 @@ import type { components } from '@betnext/api-contract';
 import {
   api,
   apiMessage,
+  Alert,
   Button,
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
   Input,
@@ -22,14 +24,10 @@ type State =
   | { kind: 'created'; market: Market }
   | { kind: 'error'; message: string };
 
-/**
- * Création d'un marché GÉNÉRIQUE (N issues — pas figé). CLIENT MINCE : envoie le payload, le back
- * valide (≥ 2 issues) et assigne les identifiants. Le front ne réimplémente aucune règle métier.
- */
 export function CreateMarket({ onCreated }: { onCreated?: () => void }): React.JSX.Element {
   const [name, setName] = useState('');
   const [game, setGame] = useState('');
-  const [issues, setIssues] = useState<string[]>(['', '']); // au moins 2
+  const [issues, setIssues] = useState<string[]>(['', '']);
   const [state, setState] = useState<State>({ kind: 'idle' });
 
   const setIssue = (i: number, value: string) =>
@@ -61,9 +59,10 @@ export function CreateMarket({ onCreated }: { onCreated?: () => void }): React.J
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Créer un marché (N issues)</CardTitle>
+        <CardTitle className="text-base">Ouvrir un marché</CardTitle>
+        <CardDescription>Modèle générique à N issues (pas de binaire figé A/B).</CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+      <CardContent className="flex flex-col gap-4">
         <div className="grid gap-1.5">
           <Label htmlFor="m-name">Événement</Label>
           <Input
@@ -80,13 +79,16 @@ export function CreateMarket({ onCreated }: { onCreated?: () => void }): React.J
             value={game}
             onChange={(e) => setGame(e.target.value)}
             placeholder="ex. CS2"
-            className="w-40"
+            className="w-48"
           />
         </div>
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-sm font-medium">Issues (au moins 2)</legend>
+          <legend className="mb-1 text-sm font-medium">Issues (au moins 2)</legend>
           {issues.map((issue, i) => (
             <div key={i} className="flex items-center gap-2">
+              <span className="w-5 text-center text-xs font-medium text-muted-foreground tabular-nums">
+                {i + 1}
+              </span>
               <Label htmlFor={`issue-${i}`} className="sr-only">
                 Issue {i + 1}
               </Label>
@@ -109,7 +111,13 @@ export function CreateMarket({ onCreated }: { onCreated?: () => void }): React.J
               )}
             </div>
           ))}
-          <Button type="button" variant="secondary" size="sm" onClick={addIssue} className="self-start">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={addIssue}
+            className="self-start"
+          >
             + Ajouter une issue
           </Button>
         </fieldset>
@@ -118,14 +126,14 @@ export function CreateMarket({ onCreated }: { onCreated?: () => void }): React.J
         </Button>
         <div aria-live="polite">
           {state.kind === 'created' && (
-            <p role="status" className="text-sm">
-              Marché « {state.market.name} » créé ({state.market.outcomes.length} issues).
-            </p>
+            <Alert variant="success" role="status" title="Marché créé">
+              « {state.market.name} » · {state.market.outcomes.length} issues.
+            </Alert>
           )}
           {state.kind === 'error' && (
-            <p role="alert" className="text-sm text-destructive">
+            <Alert variant="error" role="alert" title="Création impossible">
               {state.message}
-            </p>
+            </Alert>
           )}
         </div>
       </CardContent>

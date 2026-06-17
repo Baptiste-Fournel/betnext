@@ -1,4 +1,3 @@
-/** Message lisible d'une erreur API (le back renvoie { statusCode, message }). Aucune règle métier dupliquée. */
 export function apiMessage(error: unknown, status?: number): string {
   const prefix = status ? `${status} — ` : '';
   if (error && typeof error === 'object' && 'message' in error) {

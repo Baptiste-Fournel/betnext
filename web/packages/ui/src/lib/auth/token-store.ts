@@ -1,8 +1,3 @@
-/**
- * Stockage du token (POC : localStorage). Un httpOnly cookie serait plus robuste contre le XSS, mais
- * hors périmètre. Source unique lue par le middleware du client API (ajout du header Authorization)
- * et par le contexte d'auth. Notifie ses abonnés à chaque changement (ex. 401 → purge → retour login).
- */
 const KEY = 'betnext.token';
 const listeners = new Set<() => void>();
 

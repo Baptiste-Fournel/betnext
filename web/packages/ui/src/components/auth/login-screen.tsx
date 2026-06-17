@@ -2,17 +2,13 @@
 
 import { useState } from 'react';
 import { useAuth } from './auth-context';
+import { BrandMark } from '../brand';
+import { Alert } from '../ui/alert';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 
-/**
- * Écran de login PARTAGÉ : username + mot de passe → `POST /auth/login` (via le contexte d'auth). Le
- * token est stocké et envoyé automatiquement par le middleware du client API. CLIENT MINCE : aucune
- * logique d'auth ici (le serveur authentifie ; on affiche juste le formulaire et l'erreur renvoyée).
- * `defaultUsername` permet à chaque app de pré-remplir SON compte de démo (joueur vs gestionnaire).
- */
 export function LoginScreen({
   defaultUsername = 'demo-player',
 }: {
@@ -36,16 +32,18 @@ export function LoginScreen({
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-6 p-4 sm:p-8">
-      <div>
-        <h1 className="text-2xl font-semibold">BetNext</h1>
-        <p className="text-sm text-muted-foreground">Connectez-vous pour accéder à la plateforme.</p>
+      <div className="flex flex-col gap-3">
+        <BrandMark />
+        <p className="text-sm text-muted-foreground">
+          La plateforme de paris e-sport. Connectez-vous pour accéder à votre interface.
+        </p>
       </div>
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Connexion</CardTitle>
-          <CardDescription>Comptes de démo seedés ci-dessous.</CardDescription>
+          <CardDescription>Utilisez un compte de démo pré-rempli ci-dessous.</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-4">
           <form
             className="flex flex-col gap-3"
             onSubmit={(e) => {
@@ -79,14 +77,20 @@ export function LoginScreen({
             </Button>
           </form>
           {error && (
-            <p id="login-error" role="alert" className="text-sm text-destructive">
+            <Alert id="login-error" role="alert" variant="error" title="Connexion refusée">
               {error}
-            </p>
+            </Alert>
           )}
-          <p className="text-xs text-muted-foreground">
-            Démo : <strong>demo-player</strong> / <strong>demo-manager</strong> — mot de passe{' '}
-            <strong>changeme123</strong>.
-          </p>
+          <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+            <p className="mb-1.5 font-medium text-foreground">Comptes de démo</p>
+            <p>
+              Joueur <code className="rounded bg-background px-1 py-0.5">demo-player</code> · Gestionnaire{' '}
+              <code className="rounded bg-background px-1 py-0.5">demo-manager</code>
+            </p>
+            <p className="mt-1">
+              Mot de passe <code className="rounded bg-background px-1 py-0.5">changeme123</code>
+            </p>
+          </div>
         </CardContent>
       </Card>
     </main>

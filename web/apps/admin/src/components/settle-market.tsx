@@ -5,13 +5,18 @@ import type { components } from '@betnext/api-contract';
 import {
   api,
   apiMessage,
+  Alert,
+  Badge,
   Button,
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
   Label,
+  Select,
   Skeleton,
+  cn,
 } from '@betnext/ui';
 
 type Market = components['schemas']['MarketDto'];
@@ -25,11 +30,6 @@ type State =
 
 const VOID_CHOICE = '__void__';
 
-/**
- * Règlement d'un marché par le gestionnaire. CLIENT MINCE : envoie l'ACTION (issue gagnante ou
- * annulation) ; le back résout les paris (statuts, payout, events — BET-12). États : chargement
- * (skeleton), erreur de chargement (+ réessayer), vide, erreur de règlement (message API).
- */
 export function SettleMarket({
   refreshKey,
   onSettled,
@@ -90,27 +90,25 @@ export function SettleMarket({
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Régler un marché</CardTitle>
+        <CardDescription>Désignez l&apos;issue gagnante ou annulez (remboursement).</CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+      <CardContent className="flex flex-col gap-4">
         {loadError && (
-          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-            <span className="text-destructive" role="alert">
-              Impossible de charger les marchés.
-            </span>
-            <Button variant="outline" size="sm" onClick={() => void load()}>
+          <Alert variant="error" role="alert" title="Impossible de charger les marchés.">
+            <Button variant="outline" size="sm" className="mt-1" onClick={() => void load()}>
               Réessayer
             </Button>
-          </div>
+          </Alert>
         )}
         {!loadError && markets === null && <Skeleton className="h-10 w-full" />}
         {!loadError && markets?.length === 0 && (
-          <p className="text-sm text-muted-foreground">Aucun marché à régler.</p>
+          <p className="py-4 text-center text-sm text-muted-foreground">Aucun marché à régler.</p>
         )}
 
         {!loadError && markets && markets.length > 0 && (
           <div className="grid gap-1.5">
             <Label htmlFor="settle-market">Marché</Label>
-            <select
+            <Select
               id="settle-market"
               value={marketId}
               onChange={(e) => {
@@ -118,7 +116,6 @@ export function SettleMarket({
                 setChoice('');
                 setState({ kind: 'idle' });
               }}
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <option value="">— choisir —</option>
               {markets.map((m) => (
@@ -126,34 +123,51 @@ export function SettleMarket({
                   {m.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
 
         {market && (
-          <fieldset className="flex flex-col gap-1.5">
-            <legend className="text-sm font-medium">Résultat</legend>
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-1 text-sm font-medium">Résultat</legend>
             {market.outcomes.map((o) => (
-              <label key={o.id} className="flex items-center gap-2 text-sm">
+              <label
+                key={o.id}
+                className={cn(
+                  'flex cursor-pointer items-center gap-2 rounded-md border p-2.5 text-sm transition-colors',
+                  choice === o.id ? 'border-primary bg-primary/10' : 'border-border hover:bg-accent',
+                )}
+              >
                 <input
                   type="radio"
                   name="settle-choice"
+                  className="accent-primary"
                   value={o.id}
                   checked={choice === o.id}
                   onChange={() => setChoice(o.id)}
                 />
-                {o.label} <span className="text-muted-foreground">gagnant</span>
+                <span>{o.label}</span>
+                <span className="text-muted-foreground">gagnant</span>
               </label>
             ))}
-            <label className="flex items-center gap-2 text-sm">
+            <label
+              className={cn(
+                'flex cursor-pointer items-center gap-2 rounded-md border p-2.5 text-sm transition-colors',
+                choice === VOID_CHOICE
+                  ? 'border-warning bg-warning/10'
+                  : 'border-border hover:bg-accent',
+              )}
+            >
               <input
                 type="radio"
                 name="settle-choice"
+                className="accent-primary"
                 value={VOID_CHOICE}
                 checked={choice === VOID_CHOICE}
                 onChange={() => setChoice(VOID_CHOICE)}
               />
-              Annuler le marché (remboursement)
+              <span>Annuler le marché</span>
+              <span className="text-muted-foreground">remboursement</span>
             </label>
           </fieldset>
         )}
@@ -166,16 +180,21 @@ export function SettleMarket({
 
         <div aria-live="polite">
           {state.kind === 'done' && (
-            <p role="status" className="text-sm">
-              Réglé : {state.result.settled} pari(s) — gagnés {state.result.won}, perdus{' '}
-              {state.result.lost}, annulés {state.result.voided}
-              {state.result.failed > 0 ? `, échecs ${state.result.failed}` : ''}.
-            </p>
+            <Alert variant="success" role="status" title={`${state.result.settled} pari(s) réglé(s)`}>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                <Badge variant="success">{state.result.won} gagnés</Badge>
+                <Badge variant="destructive">{state.result.lost} perdus</Badge>
+                <Badge variant="secondary">{state.result.voided} annulés</Badge>
+                {state.result.failed > 0 && (
+                  <Badge variant="warning">{state.result.failed} échecs</Badge>
+                )}
+              </div>
+            </Alert>
           )}
           {state.kind === 'error' && (
-            <p role="alert" className="text-sm text-destructive">
+            <Alert variant="error" role="alert" title="Règlement impossible">
               {state.message}
-            </p>
+            </Alert>
           )}
         </div>
       </CardContent>

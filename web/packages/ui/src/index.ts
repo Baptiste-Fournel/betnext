@@ -1,9 +1,3 @@
-/**
- * Barrel public du package UI partagé. Les deux apps importent UNIQUEMENT depuis `@betnext/ui`
- * (jamais le chemin interne d'un fichier) — frontière propre, zéro copier-coller.
- */
-
-// Primitives shadcn/ui
 export { Button, buttonVariants, type ButtonProps } from './components/ui/button';
 export {
   Card,
@@ -16,17 +10,27 @@ export { Input } from './components/ui/input';
 export { Label } from './components/ui/label';
 export { Badge, badgeVariants, type BadgeProps } from './components/ui/badge';
 export { Skeleton } from './components/ui/skeleton';
+export { Select } from './components/ui/select';
+export { Alert } from './components/ui/alert';
+export {
+  AlertIcon,
+  BoltIcon,
+  CheckIcon,
+  InfoIcon,
+  LockIcon,
+  TicketIcon,
+} from './components/ui/icons';
 
-// Auth + coquille de rôle (scoping par app)
+export { BrandMark } from './components/brand';
+export { BetStatusBadge } from './components/bet-status-badge';
+
 export { AuthProvider, useAuth, type Role } from './components/auth/auth-context';
 export { LoginScreen } from './components/auth/login-screen';
-export { SessionBar } from './components/auth/session-bar';
+export { AppHeader } from './components/auth/app-header';
 export { AppShell } from './components/app-shell';
 
-// Composant métier partagé (joueur + admin)
 export { HistoryPanel } from './components/history-panel';
 
-// Client API typé + utilitaires (client MINCE, généré contre le contrat)
 export { api } from './lib/api/client';
 export { apiMessage } from './lib/api/error-message';
 export { API_BASE_URL } from './lib/env';

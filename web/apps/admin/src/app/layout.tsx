@@ -4,7 +4,7 @@ import '@betnext/ui/globals.css';
 import { AuthProvider } from '@betnext/ui';
 
 export const metadata: Metadata = {
-  title: 'BetNext — Admin',
+  title: 'BetNext — Gestionnaire',
   description: "App gestionnaire BetNext (POC) — client typé contre l'OpenAPI du back, authentifié.",
 };
 

@@ -6,6 +6,7 @@ import {
   api,
   API_BASE_URL,
   useAuth,
+  Alert,
   Badge,
   Button,
   Card,
@@ -16,11 +17,11 @@ import {
   Skeleton,
   HistoryPanel,
 } from '@betnext/ui';
-import { PlaceBetForm } from '@/components/place-bet-form';
+import { OutcomeOddsButton } from '@/components/outcome-odds-button';
+import { BetSlip, type Selection } from '@/components/bet-slip';
 import { CapPanel } from '@/components/cap-panel';
 
 type Market = components['schemas']['MarketDto'];
-type Outcome = components['schemas']['OutcomeDto'];
 type OddsLiveEvent = components['schemas']['OddsLiveEventDto'];
 type LiveState = 'connecting' | 'live' | 'reconnecting';
 
@@ -34,12 +35,16 @@ function parseOddsEvent(raw: string): OddsLiveEvent | null {
       }
     }
   } catch {
-    // payload illisible → ignoré
   }
   return null;
 }
 
-/** Parcours JOUEUR (rendu pour un rôle PLAYER) : marchés + cotes live (SSE) + pose + plafond + historique. */
+const LIVE_LABEL: Record<LiveState, string> = {
+  live: 'Cotes en direct',
+  reconnecting: 'Reconnexion…',
+  connecting: 'Connexion…',
+};
+
 export function PlayerView(): React.JSX.Element {
   const { user } = useAuth();
   const userId = user?.userId ?? '';
@@ -47,7 +52,7 @@ export function PlayerView(): React.JSX.Element {
   const [marketsError, setMarketsError] = useState(false);
   const [odds, setOdds] = useState<Record<string, number | null>>({});
   const [live, setLive] = useState<LiveState>('connecting');
-  const [selected, setSelected] = useState<{ market: Market; outcome: Outcome } | null>(null);
+  const [selected, setSelected] = useState<Selection | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const loadMarkets = useCallback(async () => {
@@ -70,7 +75,7 @@ export function PlayerView(): React.JSX.Element {
               });
               return [o.id, current ? current.odds : null] as const;
             } catch {
-              return [o.id, null] as const; // cote indisponible -> n'invalide pas le marché
+              return [o.id, null] as const;
             }
           }),
       );
@@ -99,96 +104,99 @@ export function PlayerView(): React.JSX.Element {
 
   return (
     <section className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-semibold">BetNext — Joueur</h1>
+          <h1 className="text-xl font-semibold">Marchés à venir</h1>
           <p className="text-sm text-muted-foreground">
-            Pari, cotes en direct, historique &amp; plafond.
+            Choisissez une issue, composez votre coupon, pariez à la cote figée.
           </p>
         </div>
-        <Badge variant={live === 'live' ? 'default' : 'secondary'} aria-live="polite">
-          {live === 'live' ? 'cotes live' : live === 'reconnecting' ? 'reconnexion…' : 'connexion…'}
+        <Badge variant={live === 'live' ? 'success' : 'secondary'} aria-live="polite">
+          <span
+            className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${
+              live === 'live' ? 'animate-pulse bg-success' : 'bg-muted-foreground'
+            }`}
+            aria-hidden
+          />
+          {LIVE_LABEL[live]}
         </Badge>
-      </header>
+      </div>
 
-      <section aria-label="Marchés" className="flex flex-col gap-4">
-        {marketsError && (
-          <Card>
-            <CardContent className="flex flex-wrap items-center justify-between gap-2 p-4 text-sm">
-              <span className="text-destructive">Impossible de charger les marchés.</span>
-              <Button variant="outline" size="sm" onClick={() => void loadMarkets()}>
+      <div className="grid items-start gap-6 lg:grid-cols-[1fr_20rem]">
+        <section aria-label="Marchés" className="flex flex-col gap-4">
+          {marketsError && (
+            <Alert variant="error" role="alert" title="Impossible de charger les marchés.">
+              <Button variant="outline" size="sm" className="mt-1" onClick={() => void loadMarkets()}>
                 Réessayer
               </Button>
-            </CardContent>
-          </Card>
-        )}
-        {!marketsError &&
-          markets === null &&
-          [0, 1].map((i) => (
-            <Card key={i} aria-hidden>
-              <CardHeader>
-                <Skeleton className="h-5 w-2/3" />
-                <Skeleton className="h-4 w-1/4" />
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2">
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
+            </Alert>
+          )}
+          {!marketsError &&
+            markets === null &&
+            [0, 1].map((i) => (
+              <Card key={i} aria-hidden>
+                <CardHeader>
+                  <Skeleton className="h-5 w-2/3" />
+                  <Skeleton className="h-4 w-1/4" />
+                </CardHeader>
+                <CardContent className="flex gap-2">
+                  <Skeleton className="h-14 flex-1" />
+                  <Skeleton className="h-14 flex-1" />
+                  <Skeleton className="h-14 flex-1" />
+                </CardContent>
+              </Card>
+            ))}
+          {!marketsError && markets?.length === 0 && (
+            <Card>
+              <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                Aucun marché ouvert pour l&apos;instant.
               </CardContent>
             </Card>
-          ))}
-        {!marketsError && markets?.length === 0 && (
-          <p className="text-sm text-muted-foreground">Aucun marché ouvert pour l&apos;instant.</p>
-        )}
-        {!marketsError &&
-          markets?.map((market) => (
-            <Card key={market.id}>
-              <CardHeader>
-                <CardTitle className="text-base">{market.name}</CardTitle>
-                <CardDescription>{market.game}</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2">
-                {market.outcomes.map((outcome) => {
-                  const current = odds[outcome.id];
-                  const isSelected = selected?.outcome.id === outcome.id;
-                  return (
-                    <div
-                      key={outcome.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2"
-                    >
-                      <span className="text-sm">{outcome.label}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm tabular-nums text-muted-foreground">
-                          {current == null ? 'cote indisponible' : `cote ${current.toFixed(2)}`}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant={isSelected ? 'default' : 'outline'}
-                          aria-pressed={isSelected}
-                          onClick={() => setSelected({ market, outcome })}
-                        >
-                          {isSelected ? 'Sélectionné' : 'Parier'}
-                        </Button>
-                      </div>
+          )}
+          {!marketsError &&
+            markets?.map((market) => (
+              <Card key={market.id}>
+                <CardHeader>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <CardTitle className="text-base">{market.name}</CardTitle>
+                      <CardDescription className="mt-1">
+                        <Badge variant="outline">{market.game}</Badge>
+                      </CardDescription>
                     </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          ))}
-      </section>
+                    <Badge variant="success">Ouvert</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {market.outcomes.map((outcome) => (
+                      <OutcomeOddsButton
+                        key={outcome.id}
+                        outcome={outcome}
+                        odds={odds[outcome.id]}
+                        selected={selected?.outcome.id === outcome.id}
+                        onSelect={() => setSelected({ market, outcome })}
+                      />
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+        </section>
 
-      {selected && (
-        <PlaceBetForm
-          key={selected.outcome.id}
-          userId={userId}
-          outcome={selected.outcome}
-          marketName={selected.market.name}
-          liveOdds={odds[selected.outcome.id] ?? null}
-          onPlaced={() => setRefreshKey((k) => k + 1)}
-        />
-      )}
+        <aside className="flex flex-col gap-4 lg:sticky lg:top-24">
+          <BetSlip
+            key={selected?.outcome.id ?? 'empty'}
+            userId={userId}
+            selection={selected}
+            liveOdds={selected ? odds[selected.outcome.id] ?? null : null}
+            onPlaced={() => setRefreshKey((k) => k + 1)}
+            onClear={() => setSelected(null)}
+          />
+          <CapPanel />
+        </aside>
+      </div>
 
-      <CapPanel />
       <HistoryPanel refreshKey={refreshKey} />
 
       <footer className="text-xs text-muted-foreground">API : {API_BASE_URL}</footer>
