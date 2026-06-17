@@ -190,6 +190,17 @@ Six rôles critiques ont attaqué l'architecture. Objections les plus fortes ret
 
 **Ancrage.** Gardien évolutivité : settlement binaire (`BettingService.php:80`), `teamA`/`teamB` en dur (`SportEvent.php:44-52`) coexistant avec `outcomes` (`:85`), ingestion LoL qui force le binaire (`LoLEsportsService.php:90-102`).
 
+**Réalisé (BET-25).** La couture `SettlementStrategy` est **prouvée par un second type réel** :
+`EXACT_SCORE` (`domain/settlement/ExactScoreStrategy.ts`), enregistré par **1 ligne** dans
+`betting.module.ts` (`new SettlementStrategyFactory([new WinningOutcomeStrategy(), new ExactScoreStrategy()])`).
+`WinningOutcomeStrategy`, `SettlementStrategyFactory` et le moteur `SettleMarket` sont **inchangés**
+(diff = +2 fichiers de domaine/spec, +1 ligne DI) — la promesse « extension additive sans réécriture »
+devient **exécutable**. La sélection se fait par `strategyKey` (`POST /markets/settle`), sans
+changement de contrat. Verrouillé bout en bout par `src/demo-scenarios.e2e.spec.ts` (scénario 2) et
+le runbook [`livrables/demo-soutenance.md`](../../livrables/demo-soutenance.md). Le payout `PARTIAL`
+reste **conçu, non implémenté** (calibrage POC) : `ExactScoreStrategy` n'émet que `WON`/`LOST`/`VOID`,
+couverts par le moteur existant.
+
 ---
 
 ### ADR-010 — Conformité légale : paramètres déclaratifs à chaud **vs** logique = code + déploiement

@@ -12,6 +12,8 @@ import { GetPlayerStatsHandler } from './application/GetPlayerStatsHandler';
 import { SettleMarket } from './application/SettleMarket';
 import { SettleMarketHandler } from './application/SettleMarketHandler';
 import { SettlementStrategyFactory } from './application/SettlementStrategyFactory';
+import { WinningOutcomeStrategy } from './domain/settlement/WinningOutcomeStrategy';
+import { ExactScoreStrategy } from './domain/settlement/ExactScoreStrategy';
 import { BET_REPOSITORY, BetRepository } from './application/ports/BetRepository';
 import { OddsProvider } from './application/ports/OddsProvider';
 import { IdGenerator } from './application/ports/IdGenerator';
@@ -103,8 +105,12 @@ export const BETTING_TOKENS = {
       inject: [PlaceBet, IDEMPOTENCY_STORE, UNIT_OF_WORK],
     },
     {
+      // Couture d'extensibilité (ADR-009) : on enregistre ICI les stratégies de règlement.
+      // Ajouter un type de pari = +1 stratégie (fichier) + cette ligne. Le moteur (SettleMarket),
+      // la factory et WinningOutcomeStrategy restent INCHANGÉS (Open/Closed). Cf. BET-25.
       provide: SettlementStrategyFactory,
-      useFactory: (): SettlementStrategyFactory => new SettlementStrategyFactory(),
+      useFactory: (): SettlementStrategyFactory =>
+        new SettlementStrategyFactory([new WinningOutcomeStrategy(), new ExactScoreStrategy()]),
     },
     {
       provide: SettleMarket,

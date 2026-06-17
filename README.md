@@ -583,6 +583,29 @@ Deux apps Next.js séparées par rôle (détails : section *Front* ci-dessous et
 joueur et gestionnaire, libellés, états). Les deux apps partagent le contrat OpenAPI généré
 et `@betnext/ui` — zéro logique métier côté front.
 
+## Démo de soutenance — les 4 scénarios (BET-25)
+
+Quatre parcours empaquètent la soutenance ; chacun **prouve la valeur d'un choix d'archi** et est
+**verrouillé par un test e2e** (`src/demo-scenarios.e2e.spec.ts`, in-memory, < 3 s, hors-ligne).
+Le **runbook pas-à-pas** (UI + API, comptes, données seed, résultats attendus) est dans
+[`livrables/demo-soutenance.md`](livrables/demo-soutenance.md).
+
+| # | Scénario | Archi prouvée | Test e2e |
+|---|----------|---------------|----------|
+| 1 | **Ajouter un jeu** | Open/Closed — Catalog générique N-issues : un jeu inédit (`Valorant`) traverse créer→parier→régler **sans une ligne de code propre au jeu** | `shouldRunFullBettingLifecycleForBrandNewGame_When…` |
+| 2 | **Ajouter un type de pari** | Open/Closed — `SettlementStrategy` + Factory : **`ExactScoreStrategy`** ajoutée = +1 fichier + 1 enregistrement DI, **0 réécriture** du moteur | `shouldSettleViaNewExactScoreStrategy_When…` |
+| 3 | **Changer une règle joueur** | Conformité externalisée (`DailyCapPolicy`, BET-13) : le plafond quotidien prend effet **immédiatement**, à la hausse comme à la baisse | `shouldEnforceTheNewCapImmediately_When…` |
+| 4 | **Refund sur erreur de paiement** | Money-safety — Saga + compensation (BET-17/ADR-004) : échec aval → **refund PSP idempotent**, jamais de charge sans crédit, ni double mouvement au rejeu | `shouldRefundChargeIdempotently_When…` |
+
+```bash
+npx jest src/demo-scenarios.e2e.spec.ts   # rejoue les 4 scénarios bout en bout
+```
+
+> Le scénario 2 illustre concrètement la couture d'ADR-009 : ajouter `EXACT_SCORE` n'a touché
+> **ni** `WinningOutcomeStrategy`, **ni** `SettlementStrategyFactory`, **ni** `SettleMarket` — seul
+> le point d'enregistrement (`betting.module.ts`) change, exactement comme promis (« extension
+> additive et localisée, sans réécriture »).
+
 ## Approche TDD
 
 Les règles de domaine sont écrites en **test-first** et restent indépendantes du framework :
@@ -598,7 +621,9 @@ le cœur (pari-mutuel, cote figée, idempotence, frontières, money-safety) est 
 infra réelle. Le **dépôt par paiement externe Stripe** (Saga orchestrée + compensation/recrédit
 idempotent + Circuit Breaker) est **implémenté** (BET-17 : stub sans clé, adapter réel mode test).
 Restent **conçus, non implémentés** (calibrage POC, voir ADR) : `BetTypeStrategy` au placement et
-payout `PARTIAL`.
+payout `PARTIAL`. La couture `SettlementStrategy` est démontrée par **deux** stratégies réelles
+(`WINNING_OUTCOME` + `EXACT_SCORE`, BET-25). Les **4 scénarios de soutenance** sont empaquetés
+(e2e + runbook) — voir *Démo de soutenance* ci-dessus.
 
 **BET-11 livré** : `placeBet` exposé en HTTP via une commande CQRS (`POST /bets`) + `GET /health` ;
 l'app est lançable (`npm start`) et couverte par un test e2e (santé + 201/400/422).
