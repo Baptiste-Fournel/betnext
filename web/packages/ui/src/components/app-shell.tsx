@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { useAuth, type Role } from './auth/auth-context';
 import { LoginScreen } from './auth/login-screen';
 import { AppHeader } from './auth/app-header';
-import { Button, buttonVariants } from './ui/button';
+import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Skeleton } from './ui/skeleton';
 import { cn } from '../lib/utils';
@@ -45,6 +45,23 @@ export function AppShell({
   }
 
   if (user.role !== role) {
+    // Mauvais rôle : on envoie l'utilisateur vers le LOGIN de la bonne plateforme,
+    // déconnecté. Les sessions ne traversent pas les origines (token en localStorage
+    // par origine), donc on (1) purge la session résiduelle de CETTE origine et (2)
+    // signale à l'app sœur de purger la sienne via ?signout=1, sinon elle réafficherait
+    // son propre gate au lieu du login.
+    const goToSiblingLogin = (): void => {
+      logout();
+      if (!siblingAppHref) return;
+      try {
+        const target = new URL(siblingAppHref);
+        target.searchParams.set('signout', '1');
+        window.location.href = target.toString();
+      } catch {
+        window.location.href = siblingAppHref;
+      }
+    };
+
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-4 p-4 sm:p-8">
         <Card>
@@ -57,9 +74,9 @@ export function AppShell({
           </CardHeader>
           <CardContent className="flex flex-wrap items-center gap-2">
             {siblingAppHref && (
-              <a href={siblingAppHref} className={cn(buttonVariants())}>
+              <Button onClick={goToSiblingLogin}>
                 Aller à l’interface {siblingAppLabel ?? ROLE_LABEL[user.role]}
-              </a>
+              </Button>
             )}
             <Button variant="outline" onClick={logout}>
               Se déconnecter

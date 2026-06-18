@@ -27,6 +27,26 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
   const [user, setUser] = useState<AuthUser | null>(null);
 
   const loadMe = useCallback(async () => {
+    // Signal de déconnexion inter-apps : une app sœur nous redirige avec ?signout=1
+    // pour garantir un atterrissage sur le LOGIN. Les tokens sont stockés par origine
+    // (localStorage), donc cette origine peut détenir une session résiduelle d'un autre
+    // rôle ; on la purge avant tout pour ne pas réafficher le gate au lieu du login.
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('signout')) {
+        clearToken();
+        params.delete('signout');
+        const query = params.toString();
+        window.history.replaceState(
+          null,
+          '',
+          window.location.pathname + (query ? `?${query}` : '') + window.location.hash,
+        );
+        setUser(null);
+        setStatus('anonymous');
+        return;
+      }
+    }
     if (!getToken()) {
       setUser(null);
       setStatus('anonymous');
