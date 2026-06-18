@@ -9,8 +9,9 @@
 #
 # Modes (tout est surchargeable par variable d'env) :
 #   scripts/demo-up.sh                 # LIVE : ports 3000/3001/3002, PG 5432, Redis 6379, .env tel quel
-#   DEMO_ISOLATED=1 scripts/demo-up.sh # ISOLÉ : ports 3300/3301/3302, PG 55432, sans Redis, creds
+#   DEMO_ISOLATED=1 scripts/demo-up.sh # ISOLÉ : ports 3300/3301/3302, PG 55432, Redis 56379, creds
 #                                      #         externes neutralisés (fixtures + PSP stub hors-ligne).
+#                                      #         Redis + worker pricing locaux → cotes live recalculées.
 #                                      #         Ne touche NI :3000 NI l'infra live.
 #   DEMO_RESET=1   scripts/demo-up.sh  # repart d'un état propre (TRUNCATE) avant le seed.
 #   SKIP_FRONTS=1  scripts/demo-up.sh  # back + infra seulement (utile pour les captures).
@@ -25,7 +26,7 @@ if [ "$ISOLATED" = "1" ]; then
   : "${BACK_PORT:=3300}"; : "${PLAYER_PORT:=3301}"; : "${ADMIN_PORT:=3302}"
   : "${PG_PORT:=55432}"; : "${REDIS_PORT:=56379}"
   : "${COMPOSE_PROJECT_NAME:=betnext-demo}"
-  : "${WITH_REDIS:=0}"
+  : "${WITH_REDIS:=1}"
   # Démo isolée = 100 % déterministe et hors-ligne : aucune dépendance externe.
   export ESPORTS_API_BASE_URL="" ESPORTS_API_KEY="" RIOT_API_KEY="" STRIPE_SECRET_KEY=""
   : "${ESPORTS_SCHEDULER_ENABLED:=false}"; export ESPORTS_SCHEDULER_ENABLED
