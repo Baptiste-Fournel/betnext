@@ -35,30 +35,28 @@ le module Pricing reste extrait en service séparé (preuve du « déploiement i
 
 ### Back (services Railway : API + worker)
 
-| Variable | Service | Nature | Requis | Valeur / source |
+| Variable | Service | Nature | Requis | Où l'obtenir / valeur |
 |---|---|---|---|---|
-| `DATABASE_URL` | API | **managé** | ✅ | Référence le plugin Postgres : `${{Postgres.DATABASE_URL}}` |
-| `REDIS_URL` | API + **worker** | **managé** | ✅ (async) | Référence le plugin Redis : `${{Redis.REDIS_URL}}` |
-| `AUTH_SECRET` | API | **secret** | ✅ | `openssl rand -hex 32` (jamais committé) |
+| `DATABASE_URL` | API | **managé** | ✅ | **Auto-fourni par le plugin Postgres Railway.** Le poser via la référence `${{Postgres.DATABASE_URL}}` (Railway l'injecte entre services du même projet) — rien à copier-coller à la main |
+| `REDIS_URL` | API + **worker** | **managé** | ✅ (async) | **Auto-fourni par le plugin Redis Railway.** Référence `${{Redis.REDIS_URL}}` (injecté automatiquement aux services du projet) |
+| `AUTH_SECRET` | API | **secret** | ✅ | **Générer soi-même** : `openssl rand -hex 32` (jamais committé) |
 | `PORT` | API | **auto** | ✅ | **Injecté par Railway** — ne pas poser à la main |
 | `DB_POOL_SIZE` | API | config | — | Défaut `10` |
 | `OUTBOX_POLL_MS` | API | config | — | Cadence du relais Outbox, défaut `500` |
-| `ESPORTS_API_BASE_URL` | API | config | — | Vide → **fixtures déterministes** (démo hors-ligne) |
-| `ESPORTS_API_KEY` | API | secret | — | Clé du feed esports si `ESPORTS_API_BASE_URL` est renseignée |
+| `ESPORTS_API_BASE_URL` | API | config | — | **Valeur publique** (feed LoL Esports) : `https://esports-api.lolesports.com`. Vide → **fixtures déterministes** (démo hors-ligne) |
+| `ESPORTS_API_KEY` | API | clé publique | — | **Clé publique** du front lolesports.com (`x-api-key`) : `0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z`. Requise seulement si `ESPORTS_API_BASE_URL` est renseignée |
 | `ESPORTS_SYNC_MIN_INTERVAL_MS` | API | config | — | Throttle synchro résultats, défaut `3000` |
 | `ESPORTS_SCHEDULER_ENABLED` | API | config | — | `true` pour armer le rafraîchissement auto (sinon inactif) |
 | `ESPORTS_SCHEDULER_INTERVAL_MS` | API | config | — | Intervalle du scheduler, défaut `300000` (5 min) |
-| `STRIPE_SECRET_KEY` | API | **secret** | — | `sk_test_...` → adapter Stripe réel (mode test). Vide → PSP factice |
-
-> `RIOT_API_KEY` n'est **pas** utilisé par le code : le feed esports lit `ESPORTS_API_KEY`.
-> Inutile de le poser.
+| `STRIPE_SECRET_KEY` | API | **secret** | — | Dashboard Stripe → **Developers ▸ API keys** : <https://dashboard.stripe.com/test/apikeys> (clé `sk_test_...`). Vide → PSP factice |
+| `RIOT_API_KEY` | API | secret | — | **Non utilisé par le code actuel** (le feed lit `ESPORTS_API_KEY`). Si un jour activé : portail Riot <https://developer.riotgames.com/> |
 
 ### Fronts (projets Vercel : player + admin)
 
-| Variable | Nature | Requis | Valeur / source |
+| Variable | Nature | Requis | Où l'obtenir / valeur |
 |---|---|---|---|
-| `NEXT_PUBLIC_API_BASE_URL` | config (publique) | ✅ | **URL publique de l'API Railway** (ex. `https://betnext-api.up.railway.app`) |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | config (publique) | — | `pk_test_...` (uniquement si Stripe Elements branché) |
+| `NEXT_PUBLIC_API_BASE_URL` | config (publique) | ✅ | **URL publique du service API Railway**, obtenue après déploiement via `railway domain` (ou Railway ▸ service API ▸ Settings ▸ Networking ▸ *Public Domain*), ex. `https://betnext-api.up.railway.app` |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | config (publique) | — | Dashboard Stripe → **Developers ▸ API keys** : <https://dashboard.stripe.com/test/apikeys> (clé `pk_test_...`). Seulement si Stripe Elements branché |
 
 ---
 
@@ -89,17 +87,23 @@ Railway lit `railway.json` (builder Docker + start `node dist/main.js` + healthc
 Crée le service depuis le repo, puis pose ses variables :
 
 ```bash
-# Référencer les bases managées (références Railway, pas de valeur en dur) :
+# DATABASE_URL / REDIS_URL : AUTO-FOURNIS par les plugins Postgres/Redis Railway.
+# On ne colle aucune valeur : la référence ${{...}} pointe le plugin du même projet,
+# Railway résout et injecte l'URL réelle au démarrage.
 railway variables --set 'DATABASE_URL=${{Postgres.DATABASE_URL}}'
 railway variables --set 'REDIS_URL=${{Redis.REDIS_URL}}'
 
-# Secret d'authentification (générer une vraie valeur) :
+# AUTH_SECRET : à GÉNÉRER (aucune source externe) — openssl produit la valeur.
 railway variables --set "AUTH_SECRET=$(openssl rand -hex 32)"
 
-# Config optionnelle de démo (feed esports « vivant ») — facultatif :
+# (facultatif) Feed esports « vivant ». Valeurs PUBLIQUES (front lolesports.com) :
+#   base = https://esports-api.lolesports.com ; clé publique = x-api-key ci-dessous.
+railway variables --set 'ESPORTS_API_BASE_URL=https://esports-api.lolesports.com'
+railway variables --set 'ESPORTS_API_KEY=0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z'
 railway variables --set 'ESPORTS_SCHEDULER_ENABLED=true'
 
-# Stripe en mode test (facultatif ; sinon PSP factice) :
+# (facultatif) Stripe mode test. Récupérer sk_test_... sur :
+#   https://dashboard.stripe.com/test/apikeys  (Developers ▸ API keys ▸ Secret key)
 railway variables --set 'STRIPE_SECRET_KEY=sk_test_...'
 ```
 
@@ -152,7 +156,9 @@ cd web/apps/player
 vercel link                              # crée/relie le projet (ex. betnext-player)
 # Réglage clé dans le dashboard OU au link : Root Directory = web/apps/player
 vercel env add NEXT_PUBLIC_API_BASE_URL production
-#   → coller l'URL publique de l'API Railway (étape 3.2), ex. https://betnext-api.up.railway.app
+#   OÙ TROUVER LA VALEUR : URL publique de l'API Railway (étape 3.2) → `railway domain`
+#   (ou Railway ▸ service API ▸ Settings ▸ Networking ▸ Public Domain),
+#   ex. https://betnext-api.up.railway.app
 vercel --prod                            # déploie
 ```
 
@@ -162,12 +168,13 @@ vercel --prod                            # déploie
 cd web/apps/admin
 vercel link                              # projet ex. betnext-admin, Root Directory = web/apps/admin
 vercel env add NEXT_PUBLIC_API_BASE_URL production
-#   → même URL API Railway
+#   OÙ TROUVER LA VALEUR : même URL publique de l'API Railway (`railway domain`)
 vercel --prod
 ```
 
-> Stripe Elements (facultatif) : `vercel env add NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY production`
-> puis coller `pk_test_...`.
+> Stripe Elements (facultatif) : `vercel env add NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY production`,
+> puis coller `pk_test_...` récupérée sur <https://dashboard.stripe.com/test/apikeys>
+> (Developers ▸ API keys ▸ Publishable key).
 
 > **Workspace install** : `vercel.json` lance `npm install --prefix ../..` (installe tout le
 > monorepo `web/`, dont les packages partagés `@betnext/ui` et `@betnext/api-contract`), puis
