@@ -1,5 +1,3 @@
-export const QUEUE_PORT = Symbol('QueuePort');
-
 export interface OutboxMessage {
   id: string;
   type: string;

@@ -1,5 +1,3 @@
-export const ODDS_PUBLISHER = Symbol('OddsPublisher');
-
 export interface OddsUpdate {
   outcomeId: string;
   odds: number;
