@@ -10,3 +10,4 @@ next-env.d.ts
 # Les .env.example (sans secret) DOIVENT être versionnés — le .gitignore racine ignore `.env.*`,
 # on les ré-inclut donc explicitement ici (ce fichier, plus profond, est prioritaire).
 !.env.example
+.vercel
