@@ -88,10 +88,11 @@ Formation développeurs — partie architecture (≈ 20 min)
 
 ## La cote : pari-mutuel **asynchrone**, **figée** à la pose
 
-- **Pari-mutuel générique N-issues** : `cote(issue) = total événement / total issue`, bornée `[1.10,
-  5.00]`.
-- Recalcul **hors du chemin d'écriture** : `BetPlaced` → service **Pricing extrait** (bus-only) →
-  `OddsUpdated`.
+- **Pari-mutuel générique N-issues** : `cote(issue) = total du marché / total de l'issue`, bornée
+  `[1.10, 5.00]`. À chaque pari, **toutes les issues du marché** sont recalculées (l'issue pariée
+  baisse, ses sœurs montent ; une issue sans mise → 5.00), normalisé sur le **pool du marché** seul.
+- Recalcul **hors du chemin d'écriture** : `MarketCreated` compose la projection `issue → marché` du
+  service **Pricing extrait** (bus-only) ; `BetPlaced` → recalcul du marché → `OddsUpdated`.
 - À la pose, la cote est **figée** (`lockedOdds`) : un recalcul concurrent **ne change jamais** un pari
   déjà posé.
 

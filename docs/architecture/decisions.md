@@ -66,7 +66,7 @@ Six rôles critiques ont attaqué l'architecture. Objections les plus fortes ret
 
 ### ADR-002 — Module extrait pour la preuve : **Pricing**
 
-**Décision.** Extraire **Pricing** en microservice NestJS (transporter). Pricing ne lit jamais la base Betting : il **consomme les événements `BetPlaced`** (issue + montant), maintient ses **propres totaux par issue**, et **republie `OddsUpdated`** que le read-model et le Catalog consomment.
+**Décision.** Extraire **Pricing** en microservice NestJS (transporter). Pricing ne lit jamais la base Betting ni celle du Catalog : il **consomme `MarketCreated`** (composition du marché → projection `issue → marché`) et **`BetPlaced`** (issue + montant), maintient ses **propres totaux par marché**, recalcule **toutes les issues du marché concerné** (pool du marché seul, jamais global), et **republie `OddsUpdated`** pour chaque issue — que le read-model consomme.
 
 **Alternatives écartées.** *Game Integration* : bon candidat (ACL d'un tiers, isolement de l'API Riot — déjà caché/temporisé dans le legacy, `LoLEsportsService.php:20-31`), mais il est I/O-bound sur un tiers ; l'extraire prouve l'*isolation d'une intégration*, pas la *scalabilité indépendante d'un composant interne chaud* (moins aligné sur C1).
 

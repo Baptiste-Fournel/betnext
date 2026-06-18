@@ -261,7 +261,7 @@ reste le cas **à ne pas** extraire (ADR-003).
 | Couture en place | Avant extraction | Après extraction |
 |------------------|------------------|------------------|
 | Port shared-kernel (`Market*Port`, `Wallet*Port`, `StakeGuardPort`) | adapter in-process | adapter HTTP **ou** événement Outbox — port inchangé |
-| Bus intra-module | `@nestjs/cqrs` in-process | `BetPlaced`/`OddsUpdated`/`MatchSettled` via Outbox→BullMQ |
+| Bus intra-module | `@nestjs/cqrs` in-process | `MarketCreated`/`BetPlaced`/`OddsUpdated`/`MatchSettled` via Outbox→BullMQ |
 | Atomicité argent | 1 transaction Postgres | **reste dans le cœur** — jamais déplacée derrière le réseau |
 | Idempotence | `processed_messages` (consommateur) | identique, obligatoire at-least-once |
 | Réconciliation | ledger signé `Σ=solde` (ADR-013) | identique, l'Outbox ne transporte pas d'argent |

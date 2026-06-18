@@ -4,6 +4,7 @@ import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import { OddsCalculator } from './contexts/pricing/domain/OddsCalculator';
 import { RecalculateOddsOnBetPlaced } from './contexts/pricing/application/RecalculateOddsOnBetPlaced';
+import { RegisterMarketOnCreated } from './contexts/pricing/application/RegisterMarketOnCreated';
 import { QueueOddsPublisher } from './contexts/pricing/infrastructure/QueueOddsPublisher';
 import { RedisPricingStore } from './contexts/pricing/infrastructure/RedisPricingStore';
 import { PricingWorker } from './contexts/pricing/infrastructure/PricingWorker';
@@ -22,12 +23,14 @@ async function bootstrap(): Promise<void> {
   const connection = redisConnectionFromUrl(redisUrl);
   const redis = new Redis(redisUrl);
   const oddsQueue = new Queue(ODDS_QUEUE, { connection });
+  const store = new RedisPricingStore(redis);
   const recalc = new RecalculateOddsOnBetPlaced(
-    new RedisPricingStore(redis),
+    store,
     new OddsCalculator(),
     new QueueOddsPublisher(new BullMqQueueAdapter(oddsQueue)),
   );
-  const worker = new PricingWorker(DOMAIN_EVENTS_QUEUE, connection, recalc).start();
+  const registrar = new RegisterMarketOnCreated(store);
+  const worker = new PricingWorker(DOMAIN_EVENTS_QUEUE, connection, recalc, registrar).start();
   logger.log(`Service Pricing démarré : consomme ${DOMAIN_EVENTS_QUEUE}, publie ${ODDS_QUEUE}.`);
 
   const shutdown = async (): Promise<void> => {

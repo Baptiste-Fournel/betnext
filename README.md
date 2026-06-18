@@ -267,15 +267,20 @@ ne communique que par le **bus** : aucun appel in-process, aucun import de Betti
 `dependency-cruiser`). La cote sort donc du chemin d'écriture du pari.
 
 ```
+Catalog  --MarketCreated(outbox)--↘
 Betting  --BetPlaced(outbox)-->  OutboxDispatcher (relais câblé au boot)
          --bus betnext.domain-events-->  Service Pricing (process séparé)
-              recalcul pari-mutuel (état Redis partagé)  --bus betnext.odds-->  OddsUpdated
+              recalcul pari-mutuel PAR MARCHÉ (état Redis partagé)  --bus betnext.odds-->  OddsUpdated
 ```
 
 - **Relais câblé au boot** (`OutboxDispatcher`, comble le trou de BET-7) : tant que l'app tourne,
   l'outbox se **vide réellement** vers le bus (poll, at-least-once, actif si `DATABASE_URL` + `REDIS_URL`).
-- **Pricing = process séparé** (`npm run start:pricing`) : consomme `BetPlaced`, maintient ses
-  totaux, publie `OddsUpdated`. **Scale-out** : l'état vit dans **Redis partagé** (`PricingStore`)
+- **Pricing = process séparé** (`npm run start:pricing`) : consomme `MarketCreated` (compose sa
+  projection `issue → marché`) et `BetPlaced` (incrémente les totaux **du marché concerné**), puis
+  recalcule **toutes les issues de ce marché** et publie `OddsUpdated` pour chacune — l'issue pariée
+  baisse (→ 1.10), ses sœurs montent (→ 5.00), normalisé sur le **pool du marché** (jamais global).
+  Les events sont traités **FIFO** (worker `concurrency: 1`) pour que `MarketCreated` précède ses
+  `BetPlaced`. **Scale-out** : l'état vit dans **Redis partagé** (`PricingStore`)
   → cote correcte même à N répliques + durable au redémarrage.
 - **Consommateur idempotent** : une re-livraison at-least-once n'incrémente pas deux fois (`markProcessed`).
 - **Résilience** : **Pricing down → `placeBet` réussit** (la cote du pari est **figée** à la pose,

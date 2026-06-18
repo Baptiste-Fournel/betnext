@@ -1,6 +1,6 @@
 /* eslint-disable */
 const { DataSource } = require('typeorm');
-const { scryptSync, randomBytes } = require('node:crypto');
+const { scryptSync, randomBytes, randomUUID } = require('node:crypto');
 
 const DEMO_OPENING = 100;
 const DEMO_MARKET_ID = 'mkt-demo-lol';
@@ -17,6 +17,23 @@ const ACCOUNTS = [
 function hashPassword(plain) {
   const salt = randomBytes(16);
   return `scrypt$${salt.toString('hex')}$${scryptSync(plain, salt, 64).toString('hex')}`;
+}
+
+async function emitMarketCreated(ds, marketId, outcomes) {
+  const payload = JSON.stringify({
+    type: 'MarketCreated',
+    marketId,
+    outcomeIds: outcomes.map((o) => o.id),
+    occurredAt: new Date().toISOString(),
+  });
+  await ds.query(
+    `INSERT INTO outbox (id, type, payload)
+     SELECT $1, 'MarketCreated', $2
+     WHERE NOT EXISTS (
+       SELECT 1 FROM outbox WHERE type = 'MarketCreated' AND (payload::jsonb ->> 'marketId') = $3
+     )`,
+    [randomUUID(), payload, marketId],
+  );
 }
 
 async function openWallet(ds, userId, opening) {
@@ -47,6 +64,7 @@ async function runSeed(dataSource) {
     'INSERT INTO markets ("id", "name", "game", "outcomes") VALUES ($1, $2, $3, $4::jsonb) ON CONFLICT ("id") DO NOTHING',
     [DEMO_MARKET_ID, 'BetNext Major — Team A vs Team B', 'LoL', JSON.stringify(outcomes)],
   );
+  await emitMarketCreated(dataSource, DEMO_MARKET_ID, outcomes);
   const settledOutcomes = [
     { id: `${DEMO_SETTLED_MARKET_ID}-1`, label: 'Victoire G2 Esports' },
     { id: `${DEMO_SETTLED_MARKET_ID}-2`, label: 'Victoire Fnatic' },
@@ -56,6 +74,7 @@ async function runSeed(dataSource) {
     'INSERT INTO markets ("id", "name", "game", "outcomes") VALUES ($1, $2, $3, $4::jsonb) ON CONFLICT ("id") DO NOTHING',
     [DEMO_SETTLED_MARKET_ID, 'LEC — G2 vs Fnatic (clôturé)', 'LoL', JSON.stringify(settledOutcomes)],
   );
+  await emitMarketCreated(dataSource, DEMO_SETTLED_MARKET_ID, settledOutcomes);
   // Les marchés des matchs pro à venir ne sont PAS seedés en SQL : ils sont créés à la demande par
   // l'ingestion du feed LoL Esports (BET-30, POST /game-integration/esports/ingest), déclenchée
   // par scripts/demo-enrich.cjs au démarrage de la stack de démo.

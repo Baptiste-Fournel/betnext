@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import { CatalogMarket, MarketCatalog, NewMarket } from '../../application/ports/MarketCatalog';
 import { MarketRecord } from './MarketRecord';
 
@@ -18,7 +18,24 @@ export class TypeOrmMarketCatalog implements MarketCatalog {
       label,
     }));
     const created: CatalogMarket = { id, name: market.name, game: market.game, outcomes };
-    await this.dataSource.getRepository(MarketRecord).insert(created);
+    await this.dataSource.transaction(async (manager) => {
+      await manager.insert(MarketRecord, created);
+      await this.appendMarketCreated(manager, created);
+    });
     return created;
+  }
+
+  private async appendMarketCreated(manager: EntityManager, market: CatalogMarket): Promise<void> {
+    const payload = JSON.stringify({
+      type: 'MarketCreated',
+      marketId: market.id,
+      outcomeIds: market.outcomes.map((o) => o.id),
+      occurredAt: new Date().toISOString(),
+    });
+    await manager.query('INSERT INTO outbox (id, type, payload) VALUES ($1, $2, $3)', [
+      randomUUID(),
+      'MarketCreated',
+      payload,
+    ]);
   }
 }

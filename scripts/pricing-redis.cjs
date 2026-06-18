@@ -29,6 +29,7 @@ const { BullMqQueueAdapter } = d('messaging/BullMqQueueAdapter.js');
 const { DOMAIN_EVENTS_QUEUE, ODDS_QUEUE } = d('messaging/topics.js');
 const { OddsCalculator } = d('contexts/pricing/domain/OddsCalculator.js');
 const { RecalculateOddsOnBetPlaced } = d('contexts/pricing/application/RecalculateOddsOnBetPlaced.js');
+const { RegisterMarketOnCreated } = d('contexts/pricing/application/RegisterMarketOnCreated.js');
 const { QueueOddsPublisher } = d('contexts/pricing/infrastructure/QueueOddsPublisher.js');
 const { RedisPricingStore } = d('contexts/pricing/infrastructure/RedisPricingStore.js');
 const { PricingWorker } = d('contexts/pricing/infrastructure/PricingWorker.js');
@@ -39,7 +40,10 @@ async function waitFor(cond, timeout) {
   while (Date.now() - start < timeout) { if (await cond()) return; await sleep(150); }
   throw new Error('timeout waitFor');
 }
+const MARKET_ID = 'mkt-test';
 const betPlaced = (outcomeId, stake) => JSON.stringify({ type: 'BetPlaced', outcomeId, stake });
+const marketCreated = (marketId, outcomeIds) =>
+  JSON.stringify({ type: 'MarketCreated', marketId, outcomeIds });
 
 (async () => {
   process.env.OUTBOX_POLL_MS = '150';
@@ -58,21 +62,25 @@ const betPlaced = (outcomeId, stake) => JSON.stringify({ type: 'BetPlaced', outc
   const u = new URL(REDIS_URL);
   const connection = { host: u.hostname, port: Number(u.port || 6379) };
   const redis = new RedisClient(REDIS_URL);
-  await redis.del('pricing:stakes', 'pricing:processed');
+  const stale = await redis.keys('pricing:*');
+  if (stale.length > 0) await redis.del(...stale);
   const domain = new Queue(DOMAIN_EVENTS_QUEUE, { connection });
   const odds = new Queue(ODDS_QUEUE, { connection });
   try { await domain.obliterate({ force: true }); await odds.obliterate({ force: true }); } catch (_) {}
 
+  const store = new RedisPricingStore(redis);
   const recalc = new RecalculateOddsOnBetPlaced(
-    new RedisPricingStore(redis), new OddsCalculator(),
+    store, new OddsCalculator(),
     new QueueOddsPublisher(new BullMqQueueAdapter(odds)),
   );
-  const worker = new PricingWorker(DOMAIN_EVENTS_QUEUE, connection, recalc).start();
+  const registrar = new RegisterMarketOnCreated(store);
+  const worker = new PricingWorker(DOMAIN_EVENTS_QUEUE, connection, recalc, registrar).start();
   const received = [];
   const oddsWorker = new Worker(ODDS_QUEUE, async (job) => { received.push(JSON.parse(job.data.payload)); }, { connection });
 
   const idA = randomUUID(); const idB = randomUUID();
   await ds.getRepository(OutboxRecord).insert([
+    { id: randomUUID(), type: 'MarketCreated', payload: marketCreated(MARKET_ID, ['A', 'B', 'C']), createdAt: new Date(Date.now() - 5000) },
     { id: idA, type: 'BetPlaced', payload: betPlaced('A', 10) },
     { id: idB, type: 'BetPlaced', payload: betPlaced('B', 30) },
   ]);
@@ -81,15 +89,20 @@ const betPlaced = (outcomeId, stake) => JSON.stringify({ type: 'BetPlaced', outc
   dispatcher.onApplicationBootstrap();
 
   await waitFor(async () => received.length >= 2, 15000);
-  const a = received[received.length - 1].updates.find((x) => x.outcomeId === 'A');
-  assert.ok(a && Math.abs(a.odds - 4) < 0.01, 'OddsUpdated A ~ 4.00 (40/10)');
+  const last = received[received.length - 1].updates;
+  const a = last.find((x) => x.outcomeId === 'A');
+  const b = last.find((x) => x.outcomeId === 'B');
+  const c = last.find((x) => x.outcomeId === 'C');
+  assert.ok(a && Math.abs(a.odds - 4) < 0.01, 'OddsUpdated A ~ 4.00 (40/10, pool du marché)');
+  assert.ok(b && Math.abs(b.odds - 1.33) < 0.01, 'sœur B recalculée ~ 1.33 (40/30)');
+  assert.ok(c && Math.abs(c.odds - 5) < 0.01, 'sœur C non pariée montée à 5.00 (max, plus à l ouverture)');
   const unpublished = (await ds.query('SELECT count(*)::int AS c FROM outbox WHERE "publishedAt" IS NULL'))[0].c;
   assert.strictEqual(unpublished, 0, 'le relais du boot a vidé l outbox');
-  console.log('✓ boot réel : outbox -> OutboxDispatcher -> bus -> Pricing -> OddsUpdated (vrai Redis)');
+  console.log('✓ boot réel : MarketCreated -> projection ; BetPlaced -> recalcul de TOUTES les issues du marché (vrai Redis)');
 
   await new BullMqQueueAdapter(domain).enqueue({ id: idA, type: 'BetPlaced', payload: betPlaced('A', 10) });
   await sleep(1500);
-  const totalA = await redis.hget('pricing:stakes', 'A');
+  const totalA = await redis.hget(`pricing:stakes:${MARKET_ID}`, 'A');
   assert.strictEqual(Number(totalA), 10, 'total A inchangé malgré la double-livraison (idempotent)');
   console.log('✓ double-livraison at-least-once -> dedupliquee cote Pricing (total A = 10, pas 20)');
 

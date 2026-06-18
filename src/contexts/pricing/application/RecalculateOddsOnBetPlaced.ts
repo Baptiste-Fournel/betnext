@@ -20,8 +20,12 @@ export class RecalculateOddsOnBetPlaced {
     if (!fresh) {
       return null;
     }
-    await this.store.add(message.outcomeId, message.stake);
-    const odds = this.calculator.compute(await this.store.totals());
+    const marketId = await this.store.marketOf(message.outcomeId);
+    if (!marketId) {
+      return null;
+    }
+    await this.store.addStake(marketId, message.outcomeId, message.stake);
+    const odds = this.calculator.compute(await this.store.marketStakes(marketId));
     const updates: OddsUpdate[] = [...odds].map(([outcomeId, value]) => ({
       outcomeId,
       odds: value.value,
