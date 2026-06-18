@@ -12,6 +12,7 @@ import { Queue } from 'bullmq';
 import { OutboxRelay } from './OutboxRelay';
 import { BullMqQueueAdapter } from './BullMqQueueAdapter';
 import { DOMAIN_EVENTS_QUEUE } from './topics';
+import { redisConnectionFromUrl } from './redisConnection';
 
 @Injectable()
 export class OutboxDispatcher implements OnApplicationBootstrap, OnModuleDestroy {
@@ -28,8 +29,7 @@ export class OutboxDispatcher implements OnApplicationBootstrap, OnModuleDestroy
       this.logger.log('OutboxDispatcher inerte (DATABASE_URL/REDIS_URL absent) — mode sans bus.');
       return;
     }
-    const url = new URL(redisUrl);
-    const connection = { host: url.hostname, port: Number(url.port || 6379) };
+    const connection = redisConnectionFromUrl(redisUrl);
     this.queue = new Queue(DOMAIN_EVENTS_QUEUE, { connection });
     const relay = new OutboxRelay(this.dataSource, new BullMqQueueAdapter(this.queue));
     const intervalMs = Number(process.env.OUTBOX_POLL_MS ?? 500);

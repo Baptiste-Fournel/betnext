@@ -9,6 +9,7 @@ import { RedisPricingStore } from './contexts/pricing/infrastructure/RedisPricin
 import { PricingWorker } from './contexts/pricing/infrastructure/PricingWorker';
 import { BullMqQueueAdapter } from './messaging/BullMqQueueAdapter';
 import { DOMAIN_EVENTS_QUEUE, ODDS_QUEUE } from './messaging/topics';
+import { redisConnectionFromUrl } from './messaging/redisConnection';
 
 async function bootstrap(): Promise<void> {
   const logger = new Logger('PricingService');
@@ -18,8 +19,7 @@ async function bootstrap(): Promise<void> {
     process.exit(1);
     return;
   }
-  const url = new URL(redisUrl);
-  const connection = { host: url.hostname, port: Number(url.port || 6379) };
+  const connection = redisConnectionFromUrl(redisUrl);
   const redis = new Redis(redisUrl);
   const oddsQueue = new Queue(ODDS_QUEUE, { connection });
   const recalc = new RecalculateOddsOnBetPlaced(

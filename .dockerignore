@@ -1,0 +1,21 @@
+# Contexte de build minimal : seuls package*.json, tsconfig*, src/ sont nécessaires (cf. Dockerfile).
+node_modules
+dist
+coverage
+web
+docs
+livrables
+packages
+scripts
+.git
+.github
+.idea
+.demo
+.env
+.env.*
+*.log
+*.bundle
+.fuse_hidden*
+*.md
+betnext.bundle
+docker-compose.yml

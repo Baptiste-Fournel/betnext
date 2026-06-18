@@ -9,6 +9,7 @@ import { Job, Worker } from 'bullmq';
 import { ODDS_READ_MODEL, OddsReadModel } from './OddsReadModel';
 import { OddsLiveEvent, OddsStream } from './OddsStream';
 import { ODDS_QUEUE } from '../messaging/topics';
+import { redisConnectionFromUrl } from '../messaging/redisConnection';
 
 interface OddsUpdatedPayload {
   type: string;
@@ -43,8 +44,7 @@ export class OddsProjectorService implements OnApplicationBootstrap, OnModuleDes
       this.logger.log('Projecteur cotes inerte (REDIS_URL absent) — mode sans bus.');
       return;
     }
-    const url = new URL(redisUrl);
-    const connection = { host: url.hostname, port: Number(url.port || 6379) };
+    const connection = redisConnectionFromUrl(redisUrl);
     this.worker = new Worker(
       ODDS_QUEUE,
       async (job: Job) => {

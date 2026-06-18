@@ -655,6 +655,22 @@ npx jest src/demo-scenarios.e2e.spec.ts   # rejoue les 4 scénarios bout en bout
 > le point d'enregistrement (`betting.module.ts`) change, exactement comme promis (« extension
 > additive et localisée, sans réécriture »).
 
+## Déploiement en ligne (BET-36)
+
+Mise en ligne **archi intacte** — voir le pas-à-pas complet dans [`DEPLOY.md`](DEPLOY.md) :
+
+- **Fronts → Vercel** : `web/apps/player` et `web/apps/admin`, deux projets depuis le monorepo
+  (`vercel.json` par app : install au workspace root `web/`, puis `next build`). Variable de
+  build `NEXT_PUBLIC_API_BASE_URL` = URL publique du back.
+- **Back + worker → Railway** : une image (`Dockerfile`), deux services — l'**API**
+  (`node dist/main.js`, écoute le `PORT` injecté, healthcheck `/health`, cf. `railway.json`) et
+  le **worker Pricing** (`node dist/pricing.main.js`, bus-only, cf. `railway.worker.json`).
+  Les **migrations** TypeORM sont jouées **au boot de l'API** (`migrationsRun: true`).
+- **Postgres + Redis** : plugins Railway managés (`DATABASE_URL` / `REDIS_URL`).
+- **Secrets** (`AUTH_SECRET`, `STRIPE_SECRET_KEY`…) posés par l'opérateur via CLI — **jamais
+  committés** ; le repo ne contient que des placeholders. Tableau complet des variables (secrets
+  vs config, front vs back) dans `DEPLOY.md`.
+
 ## Approche TDD
 
 Les règles de domaine sont écrites en **test-first** et restent indépendantes du framework :
