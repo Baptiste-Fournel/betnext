@@ -19,6 +19,7 @@ const TABLES = [
   'rg_caps',
   'rg_daily_stakes',
   'markets',
+  'match_links',
   'users',
 ];
 

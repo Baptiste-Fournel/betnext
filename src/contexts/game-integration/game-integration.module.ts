@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { getDataSourceToken } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import {
   MARKET_SETTLEMENT_PORT,
   MarketSettlementPort,
@@ -19,6 +21,7 @@ import { IngestUpcomingMatches } from './application/IngestUpcomingMatches';
 import { SyncMatchResult } from './application/SyncMatchResult';
 import { SyncFeedResults } from './application/SyncFeedResults';
 import { InMemoryMatchLinkStore } from './infrastructure/InMemoryMatchLinkStore';
+import { TypeOrmMatchLinkStore } from './infrastructure/persistence/TypeOrmMatchLinkStore';
 import { CircuitBreaker } from '../../shared/resilience/circuit-breaker';
 import { LolEsportsScheduleProvider } from './infrastructure/esports/LolEsportsScheduleProvider';
 import { FixtureEsportsScheduleProvider } from './infrastructure/esports/FixtureEsportsScheduleProvider';
@@ -46,7 +49,12 @@ const schedulerIntervalMs = (): number => {
 @Module({
   controllers: [EsportsIngestionController, EsportsResultsController, UpcomingMatchesController],
   providers: [
-    { provide: MATCH_LINK_STORE, useFactory: (): MatchLinkStore => new InMemoryMatchLinkStore() },
+    {
+      provide: MATCH_LINK_STORE,
+      useFactory: (dataSource?: DataSource): MatchLinkStore =>
+        dataSource ? new TypeOrmMatchLinkStore(dataSource) : new InMemoryMatchLinkStore(),
+      inject: [{ token: getDataSourceToken(), optional: true }],
+    },
     {
       provide: IngestMatchMarket,
       useFactory: (markets: MarketCreationPort, store: MatchLinkStore): IngestMatchMarket =>

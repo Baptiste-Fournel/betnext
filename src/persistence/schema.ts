@@ -5,6 +5,7 @@ import { IdempotencyKeyRecord } from '../contexts/betting/infrastructure/persist
 import { WalletRecord } from '../contexts/wallet/infrastructure/persistence/WalletRecord';
 import { WalletOperationRecord } from '../contexts/wallet/infrastructure/persistence/WalletOperationRecord';
 import { MarketRecord } from '../contexts/catalog/infrastructure/persistence/MarketRecord';
+import { MatchLinkRecord } from '../contexts/game-integration/infrastructure/persistence/MatchLinkRecord';
 import { UserRecord } from '../contexts/identity/infrastructure/persistence/UserRecord';
 import { ProcessedMessageRecord } from '../messaging/ProcessedMessageRecord';
 import { InitBetting1718200000000 } from '../contexts/betting/infrastructure/persistence/migrations/1718200000000-InitBetting';
@@ -17,6 +18,7 @@ import { InitBetSettlementGuard1718800000000 } from '../contexts/betting/infrast
 import { InitCompliance1718900000000 } from '../contexts/compliance/infrastructure/persistence/migrations/1718900000000-InitCompliance';
 import { InitCatalog1719000000000 } from '../contexts/catalog/infrastructure/persistence/migrations/1719000000000-InitCatalog';
 import { InitIdentity1719100000000 } from '../contexts/identity/infrastructure/persistence/migrations/1719100000000-InitIdentity';
+import { InitMatchLinks1719200000000 } from '../contexts/game-integration/infrastructure/persistence/migrations/1719200000000-InitMatchLinks';
 
 export const ENTITIES = [
   BetRecord,
@@ -26,6 +28,7 @@ export const ENTITIES = [
   WalletRecord,
   WalletOperationRecord,
   MarketRecord,
+  MatchLinkRecord,
   UserRecord,
   ProcessedMessageRecord,
 ];
@@ -41,4 +44,5 @@ export const MIGRATIONS = [
   InitCompliance1718900000000,
   InitCatalog1719000000000,
   InitIdentity1719100000000,
+  InitMatchLinks1719200000000,
 ];

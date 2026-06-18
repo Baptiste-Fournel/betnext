@@ -29,6 +29,7 @@
     "test:atomicity:pg": "npm run build && node scripts/atomicity-pg.cjs",
     "test:reconciliation:pg": "npm run build && node scripts/reconciliation-pg.cjs",
     "test:bootstrap:pg": "npm run build && node scripts/bootstrap-pg.cjs",
+    "test:ingest:pg": "npm run build && node scripts/ingest-idempotence-pg.cjs",
     "db:seed": "npm run build && node scripts/seed.cjs",
     "test:outbox:redis": "npm run build && node scripts/outbox-redis.cjs",
     "test:pricing:redis": "npm run build && node scripts/pricing-redis.cjs",
